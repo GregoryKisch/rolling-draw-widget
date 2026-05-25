@@ -1,0 +1,3711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rolling Draw Widget</title>
+<style>
+    :root {
+        --bg-solid: #f5f7fb;
+        --widget-card: #ffffff;
+        --widget-border: #dbe3ef;
+        --widget-shadow: 0 18px 40px rgba(30, 41, 59, 0.12);
+
+        --text-slate-dark: #1e293b;
+        --text-slate-muted: #64748b;
+        --text-on-light: #ffffff;
+        --wheel-text-shadow: #ffffff;
+
+        --wheel-bg-edge: #eef2f7;
+        --wheel-bg-center: #ffffff;
+        --btn-bg: #eef2f7;
+        --shadow-opacity: 0.08;
+
+        --btn-main-bg: #1e293b;
+        --btn-main-text: #ffffff;
+
+        --task-main: #4f46e5;
+        --task-grad: linear-gradient(135deg, #818cf8, #4f46e5);
+
+        --reward-main: #d97706;
+        --reward-grad: linear-gradient(135deg, #fbbf24, #d97706);
+
+        --leisure-main: #0f766e;
+        --leisure-grad: linear-gradient(135deg, #2dd4bf, #0f766e);
+
+        --token-color: #d97706;
+
+        --border-radius: 20px;
+        --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    body.dark-mode {
+        --bg-solid: #0f172a;
+        --widget-card: #1e293b;
+        --widget-border: #334155;
+        --widget-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+
+        --text-slate-dark: #f8fafc;
+        --text-slate-muted: #94a3b8;
+        --text-on-light: #ffffff;
+        --wheel-text-shadow: transparent;
+
+        --wheel-bg-edge: #0f172a;
+        --wheel-bg-center: #1e293b;
+        --btn-bg: #334155;
+        --shadow-opacity: 0.32;
+
+        --btn-main-bg: #475569;
+        --btn-main-text: #f8fafc;
+
+        --task-main: #6366f1;
+        --task-grad: linear-gradient(135deg, #818cf8, #4f46e5);
+
+        --reward-main: #f59e0b;
+        --reward-grad: linear-gradient(135deg, #fbbf24, #d97706);
+
+        --leisure-main: #14b8a6;
+        --leisure-grad: linear-gradient(135deg, #2dd4bf, #0f766e);
+
+        --token-color: #fbbf24;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-solid);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--text-slate-dark);
+        transition: background-color 0.4s ease;
+    }
+
+    .widget {
+        background-color: var(--widget-card);
+        border: 1px solid var(--widget-border);
+        box-shadow: var(--widget-shadow);
+        padding: 2rem;
+        border-radius: var(--border-radius);
+        width: 360px;
+        height: 320px;
+        box-sizing: border-box;
+        text-align: center;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        transition: var(--transition);
+        overflow: hidden;
+        isolation: isolate;
+    }
+
+    .widget.expanded {
+        width: 500px;
+        height: 720px;
+    }
+
+    /* ── Token display (top-left) ── */
+    .token-display {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: var(--token-color);
+        z-index: 5;
+        transition: var(--transition);
+        padding: 0.24rem 0.48rem;
+        border-radius: 999px;
+        background: rgba(217, 119, 6, 0.08);
+        border: 1px solid rgba(217, 119, 6, 0.14);
+    }
+    body.dark-mode .token-display {
+        background: rgba(251, 191, 36, 0.10);
+        border-color: rgba(251, 191, 36, 0.18);
+    }
+    .token-display .token-icon { font-size: 1rem; line-height: 1; }
+    .token-display .token-count {
+        min-width: 1.2rem;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .token-display.bump .token-count { transform: scale(1.6); }
+    .token-display { cursor: pointer; }
+    .token-input {
+        display: none;
+        width: 3.2rem;
+        border: 1px solid var(--widget-border);
+        background: var(--widget-card);
+        color: var(--text-slate-dark);
+        border-radius: 8px;
+        padding: 0.25rem 0.35rem;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 800;
+        text-align: center;
+        outline: none;
+    }
+    .token-display.editing .token-count { display: none; }
+    .token-display.editing .token-input { display: block; }
+
+    /* ── Header icons (top-right) ── */
+    .header-icons {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        gap: 0.25rem;
+        z-index: 5;
+    }
+
+    .icon-btn {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--text-slate-muted);
+        transition: var(--transition);
+        padding: 0.4rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .icon-btn:hover { color: var(--text-slate-dark); background: var(--widget-border); }
+    .settings-btn:hover svg { transform: rotate(45deg); transition: transform 0.3s ease; }
+
+    /* ── Wheel ── */
+    .wheel-window {
+        height: 100px;
+        position: relative;
+        overflow: hidden;
+        margin-top: 1rem;
+        margin-bottom: 1.25rem;
+        border-radius: 12px;
+        background: linear-gradient(180deg, var(--wheel-bg-edge) 0%, var(--wheel-bg-center) 50%, var(--wheel-bg-edge) 100%);
+        box-shadow: inset 0 5px 15px rgba(0, 0, 0, var(--shadow-opacity));
+        border: 1px solid var(--widget-border);
+        perspective: 1000px;
+        flex-shrink: 0;
+    }
+    .wheel-window::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+    .wheel { display: flex; flex-direction: column; transform-style: preserve-3d; width: 100%; }
+    .wheel-item {
+        height: 100px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        font-weight: 800;
+        text-shadow: 1px 1px 0px var(--wheel-text-shadow);
+        letter-spacing: 0.5px;
+        color: var(--text-slate-muted);
+        padding: 0 1rem;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    /* ── Radio chips (Chores / Leisures) ── */
+    .toggles {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 1.25rem;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .chip { flex: 1; cursor: pointer; }
+    .chip input { display: none; }
+    .chip span {
+        display: block;
+        padding: 0.75rem 0.2rem;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        transition: var(--transition);
+        user-select: none;
+        background: var(--widget-card);
+        color: var(--text-slate-muted);
+        border: 1px solid var(--widget-border);
+        box-shadow: 0 4px 10px rgba(30, 41, 59, 0.04);
+    }
+    body.dark-mode .chip span {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+    }
+
+    .chip-chore input:checked + span {
+        background: var(--task-grad);
+        color: var(--text-on-light);
+        box-shadow: 0 8px 18px rgba(79, 70, 229, 0.22);
+        border-color: transparent;
+        transform: translateY(-1px);
+    }
+    .chip-leisure input:checked + span {
+        background: var(--leisure-grad);
+        color: var(--text-on-light);
+        box-shadow: 0 8px 18px rgba(15, 118, 110, 0.22);
+        border-color: transparent;
+        transform: translateY(-1px);
+    }
+
+    /* Leisure chip locked state */
+    .chip-leisure.locked span {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .chip-leisure.locked input { pointer-events: none; }
+
+    /* During a roll, category chips stay visible but are simply not clickable. */
+    .toggles.spinning {
+        pointer-events: none;
+    }
+    .toggles.spinning .chip span {
+        opacity: 0.72;
+    }
+
+    /* ── Action panels ── */
+    .action-panel { display: flex; gap: 0.5rem; width: 100%; flex-shrink: 0; }
+
+    .btn {
+        border: none;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        padding: 0 0.5rem;
+        font-size: 0.95rem;
+        font-weight: 800;
+        border-radius: 24px;
+        cursor: pointer;
+        transition: var(--transition);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        flex: 1;
+        white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+    .btn:active:not(:disabled) { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; transform: none; }
+    .btn-feedback {
+        background: var(--btn-bg) !important;
+        color: var(--text-slate-dark) !important;
+        border: 1px solid var(--widget-border) !important;
+        box-shadow: none !important;
+        filter: none !important;
+    }
+
+    .btn-main {
+        background: var(--btn-main-bg);
+        color: var(--btn-main-text);
+        width: 100%;
+        box-shadow: 0 8px 18px rgba(30, 41, 59, 0.18);
+    }
+    .btn-complete {
+        background: linear-gradient(135deg, #4ade80, #16a34a);
+        color: #ffffff;
+        box-shadow: 0 8px 16px rgba(22, 163, 74, 0.15);
+    }
+    .btn-reroll {
+        background: linear-gradient(135deg, #fbbf24, #d97706);
+        color: #ffffff;
+        box-shadow: 0 8px 16px rgba(217, 119, 6, 0.15);
+    }
+    body.dark-mode .btn-complete {
+        background: linear-gradient(135deg, #166534, #14532d);
+        color: #dcfce7;
+        border: 1px solid rgba(134, 239, 172, 0.18);
+        box-shadow: 0 8px 18px rgba(20, 83, 45, 0.28);
+    }
+    body.dark-mode .btn-reroll {
+        background: linear-gradient(135deg, #92400e, #78350f);
+        color: #fef3c7;
+        border: 1px solid rgba(252, 211, 77, 0.16);
+        box-shadow: 0 8px 18px rgba(120, 53, 15, 0.28);
+    }
+
+    /* ── Settings modal ── */
+    .modal-overlay {
+        position: absolute; inset: 0;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(8px);
+        display: flex; justify-content: center; align-items: center;
+        opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        z-index: 10; border-radius: var(--border-radius);
+    }
+    body.dark-mode .modal-overlay { background: rgba(15, 23, 42, 0.88); }
+    .modal-overlay.active { opacity: 1; pointer-events: all; }
+
+    .modal-content {
+        background: transparent; width: 100%; height: 100%; padding: 2rem 1.5rem;
+        box-sizing: border-box; display: flex; flex-direction: column;
+        transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+    .modal-overlay.active .modal-content { transform: scale(1); }
+
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-shrink: 0; }
+    .modal-header h2 { margin: 0; font-size: 1.3rem; color: var(--text-slate-dark); }
+
+    .close-btn {
+        background: var(--widget-card); border: 1px solid var(--widget-border); width: 36px; height: 36px;
+        border-radius: 50%; cursor: pointer; color: var(--text-slate-dark);
+        padding: 0; transition: var(--transition);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .close-btn:hover { background: var(--widget-border); }
+
+    /* ── Settings main category tabs ── */
+    .tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-shrink: 0;
+    }
+    .tab-btn {
+        flex: 1;
+        padding: 0.85rem 0.7rem;
+        border: none;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        font-weight: 800;
+        cursor: pointer;
+        background: var(--widget-card);
+        color: var(--text-slate-muted);
+        transition: var(--transition);
+        border: 1px solid var(--widget-border);
+        text-align: center;
+        user-select: none;
+    }
+    .tab-btn input { display: none; }
+    .tab-btn:hover { background: var(--widget-border); }
+    .tab-btn.active-chores {
+        background: var(--task-main);
+        color: var(--text-on-light);
+        border-color: transparent;
+        box-shadow: 0 6px 15px rgba(57, 73, 171, 0.22);
+    }
+    .tab-btn.active-leisures {
+        background: var(--leisure-main);
+        color: var(--text-on-light);
+        border-color: transparent;
+        box-shadow: 0 6px 15px rgba(0, 121, 107, 0.22);
+    }
+
+    .edit-list-container { flex-grow: 1; overflow-y: auto; margin-bottom: 1.5rem; padding-right: 0.5rem; }
+    .edit-list-container::-webkit-scrollbar { width: 6px; }
+    .edit-list-container::-webkit-scrollbar-thumb { background-color: var(--widget-border); border-radius: 10px; }
+
+    .edit-item {
+        display: flex; justify-content: space-between; align-items: center;
+        background: var(--widget-card);
+        padding: 0.85rem 1rem 0.85rem 1.1rem; border-radius: 12px;
+        margin-bottom: 0.75rem; font-size: 0.95rem; color: var(--text-slate-dark); font-weight: 600;
+        animation: fadeIn 0.2s ease-out; border: 1px solid var(--widget-border);
+        transition: margin-left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+        overflow: visible;
+        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.04);
+    }
+    body.dark-mode .edit-item {
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+    }
+    .edit-item:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    }
+    body.dark-mode .edit-item:hover {
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+    .edit-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        opacity: 0.95;
+        border-top-left-radius: 12px;
+        border-bottom-left-radius: 12px;
+    }
+    .edit-item-task::before { background: var(--task-grad); }
+    .edit-item-reward::before { background: var(--reward-grad); }
+    .edit-item-leisure::before { background: var(--leisure-grad); }
+    .edit-item-task { border-left-color: rgba(79, 70, 229, 0.28); }
+    .edit-item-reward { border-left-color: rgba(217, 119, 6, 0.30); }
+    .edit-item-leisure { border-left-color: rgba(15, 118, 110, 0.30); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Reward badge in list */
+    .subcat-badge {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .subcat-badge.task    { background: rgba(57,73,171,0.12);  color: var(--task-main); }
+    .subcat-badge.reward  { background: rgba(245,127,23,0.12); color: var(--reward-main); }
+
+    .edit-item-content { flex-grow: 1; text-align: left; margin-right: 1rem; display: flex; flex-direction: column; }
+    .edit-item-text { word-break: break-word; }
+
+    .tree-elbow {
+        position: absolute;
+        left: -1.2rem; top: 50%;
+        width: 0.6rem; height: 1.5rem;
+        border-left: 2px solid var(--text-slate-muted);
+        border-bottom: 2px solid var(--text-slate-muted);
+        border-bottom-left-radius: 4px;
+        transform: translateY(-100%);
+        pointer-events: none; opacity: 0.5;
+    }
+
+    .item-controls { display: flex; align-items: center; gap: 0.5rem; }
+
+    .action-btns { display: flex; gap: 0.25rem; }
+    .action-btns button {
+        background: var(--widget-card); border: 1px solid var(--widget-border); cursor: pointer;
+        width: 32px; height: 32px; border-radius: 8px; font-size: 0.9rem;
+        transition: var(--transition); display: flex; align-items: center; justify-content: center;
+        color: var(--text-slate-muted);
+    }
+    .action-btns button:hover { background: var(--widget-border); color: var(--text-slate-dark); }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        background: var(--widget-card);
+        padding: 1.25rem;
+        border-radius: 16px;
+        border: 1px solid var(--widget-border);
+        flex-shrink: 0;
+    }
+    .form-row { display: flex; gap: 0.75rem; }
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        width: 100%;
+    }
+    .field-label {
+        color: var(--text-slate-muted);
+        font-size: 0.72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        text-align: left;
+    }
+
+    .add-item-row {
+        display: flex;
+        flex-shrink: 0;
+        margin-top: 0.25rem;
+    }
+
+    .btn-add-new {
+        width: 100%;
+        border: 1px dashed var(--widget-border);
+        background: var(--widget-card);
+        color: var(--text-slate-dark);
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 900;
+        cursor: pointer;
+        transition: var(--transition);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
+
+    .btn-add-new:hover {
+        background: var(--btn-bg);
+        border-style: solid;
+        transform: translateY(-1px);
+    }
+
+    .form-group input, .form-group select {
+        padding: 0.8rem 1rem;
+        border-radius: 10px; font-family: inherit; font-size: 0.95rem; font-weight: 500;
+        outline: none; transition: var(--transition);
+        background: var(--widget-card);
+        border: 1px solid var(--widget-border);
+        color: var(--text-slate-dark);
+    }
+    .form-group input::placeholder { color: var(--text-slate-muted); }
+    .form-group input:focus, .form-group select:focus { border-color: var(--text-slate-dark); }
+    .form-group select option { background: var(--widget-card); color: var(--text-slate-dark); }
+    .form-group input { flex-grow: 1; }
+    .form-group select { flex-grow: 1; cursor: pointer; }
+
+    /* Subcat toggle inside the form (Tasks tab) */
+    .subcat-toggle {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .subcat-toggle label {
+        flex: 1;
+        cursor: pointer;
+    }
+    .subcat-toggle input { display: none; }
+    .subcat-toggle span {
+        display: block;
+        padding: 0.55rem 0.5rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-align: center;
+        border: 1px solid var(--widget-border);
+        color: var(--text-slate-muted);
+        background: var(--widget-card);
+        transition: var(--transition);
+        user-select: none;
+    }
+    .subcat-toggle .st-task input:checked + span {
+        background: var(--task-grad); color: var(--text-on-light); border-color: transparent;
+    }
+    .subcat-toggle .st-reward input:checked + span {
+        background: var(--reward-grad); color: var(--text-on-light); border-color: transparent;
+    }
+
+    .btn-save {
+        background: var(--btn-main-bg); color: var(--btn-main-text); border: none;
+        border-radius: 10px; padding: 0.8rem 1.5rem; font-size: 0.95rem;
+        font-weight: 800; cursor: pointer; transition: var(--transition);
+        text-transform: uppercase; letter-spacing: 1px;
+    }
+    .btn-save:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .btn-cancel {
+        background: var(--widget-card); color: var(--text-slate-muted); border: 1px solid var(--widget-border);
+        border-radius: 10px; padding: 0.8rem 1.5rem; font-size: 0.95rem;
+        font-weight: 800; cursor: pointer; transition: var(--transition); display: none;
+    }
+    .btn-cancel:hover { background: var(--widget-border); color: var(--text-slate-dark); }
+
+    .confetti-container {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        border-radius: var(--border-radius);
+        z-index: 999;
+    }
+    .confetti-container > div {
+        z-index: 1000;
+    }
+
+
+    /* ── Settings section header + small UI polish ── */
+    .icon-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .section-tools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        flex-shrink: 0;
+    }
+    .section-label {
+        font-size: 0.8rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        color: var(--text-slate-muted);
+    }
+
+    .subtabs {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        border-radius: 999px;
+        background: var(--btn-bg);
+        border: 1px solid var(--widget-border);
+        flex-shrink: 0;
+    }
+    .subtab-btn {
+        padding: 0.42rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        cursor: pointer;
+        color: var(--text-slate-muted);
+        background: transparent;
+        transition: var(--transition);
+        text-align: center;
+        user-select: none;
+        border: none;
+    }
+    .subtab-btn input { display: none; }
+    .subtab-btn:hover { color: var(--text-slate-dark); }
+    .subtab-btn.active-task {
+        background: rgba(79, 70, 229, 0.12);
+        color: #4f46e5;
+        box-shadow: none;
+    }
+    .subtab-btn.active-reward {
+        background: rgba(217, 119, 6, 0.14);
+        color: #b45309;
+        box-shadow: none;
+    }
+    body.dark-mode .subtab-btn.active-task {
+        background: rgba(99, 102, 241, 0.18);
+        color: #c7d2fe;
+    }
+    body.dark-mode .subtab-btn.active-reward {
+        background: rgba(245, 158, 11, 0.18);
+        color: #fde68a;
+    }
+
+    .form-notice {
+        display: none;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--reward-main);
+        text-align: left;
+    }
+    .empty-state {
+        color: var(--text-slate-muted);
+        font-size: 0.9rem;
+        font-weight: 700;
+        padding: 1rem;
+        border: 1px dashed var(--widget-border);
+        border-radius: 12px;
+        background: var(--widget-card);
+    }
+    .action-btns button.delete-confirm {
+        width: 54px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        border-color: transparent;
+        font-size: 0.75rem;
+        font-weight: 800;
+    }
+
+
+
+    /* ── Two-player shell ───────────────────────────────────────────────────── */
+    .app-shell {
+        width: 360px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        transition: var(--transition);
+    }
+    .app-shell.two-player {
+        width: 744px;
+    }
+    .app-topbar {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 42px;
+        position: relative;
+    }
+    .app-topbar .token-display {
+        position: relative;
+        top: auto;
+        left: auto;
+    }
+    .app-topbar .header-icons {
+        position: relative;
+        top: auto;
+        right: auto;
+    }
+    .players-wrap {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+        align-items: start;
+    }
+    .app-shell.two-player .players-wrap {
+        grid-template-columns: 1fr 1fr;
+    }
+    .player-widget {
+        width: 360px;
+        height: 320px;
+    }
+    .app-shell.two-player .player-widget {
+        height: 350px;
+    }
+    #widget-player1, #widget-player2 { display: none; }
+    .app-shell.two-player #widget-solo { display: none; }
+    .app-shell.two-player #widget-player1,
+    .app-shell.two-player #widget-player2 { display: flex; }
+    .player-title {
+        display: none;
+        margin-top: -0.35rem;
+        margin-bottom: 0.15rem;
+        font-size: 0.86rem;
+        font-weight: 900;
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--text-slate-muted);
+    }
+    .app-shell.two-player .player-title { display: block; }
+    .app-shell.two-player .wheel-window { margin-top: 0.35rem; }
+    .player-mode-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+    .app-shell.single-player .owner-row,
+    .app-shell.single-player .owner-badge {
+        display: none;
+    }
+
+    /* Shared modal in app shell */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        border-radius: 0;
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+    .modal-content {
+        width: min(500px, calc(100vw - 2rem));
+        height: min(720px, calc(100vh - 2rem));
+        background: transparent;
+    }
+
+    /* ── Owner selector ─────────────────────────────────────────────────────── */
+    .owner-row { display: flex; }
+    .owner-control {
+        display: flex;
+        width: 100%;
+        background: var(--btn-bg);
+        border-radius: 10px;
+        padding: 2px;
+        border: 1px solid var(--widget-border);
+        position: relative;
+    }
+    .owner-slider-bg {
+        position: absolute;
+        width: calc((100% - 4px) / 3);
+        height: 34px;
+        background: var(--widget-card);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,var(--shadow-opacity));
+        transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+        z-index: 1;
+        top: 2px;
+        left: 2px;
+    }
+    .owner-control[data-owner="player1"] .owner-slider-bg { transform: translateX(0%); }
+    .owner-control[data-owner="both"] .owner-slider-bg { transform: translateX(100%); }
+    .owner-control[data-owner="player2"] .owner-slider-bg { transform: translateX(200%); }
+    .owner-lbl {
+        flex: 1;
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .owner-lbl input { display: none; }
+    .owner-lbl span {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: var(--text-slate-muted);
+        font-size: 0.78rem;
+        font-weight: 900;
+        transition: color 0.25s ease;
+        user-select: none;
+    }
+    .owner-lbl input:checked + span { color: var(--text-slate-dark); }
+    .owner-badge {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        margin-top: 0.32rem;
+        padding: 0.14rem 0.42rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.35px;
+        text-transform: uppercase;
+        background: var(--btn-bg);
+        color: var(--text-slate-muted);
+        border: 1px solid var(--widget-border);
+    }
+    .owner-badge.player1 { color: #c084fc; border-color: rgba(192, 132, 252, 0.24); background: rgba(192, 132, 252, 0.10); }
+    .owner-badge.both { color: var(--leisure-main); border-color: rgba(20, 184, 166, 0.24); background: rgba(20, 184, 166, 0.10); }
+    .owner-badge.player2 { color: #60a5fa; border-color: rgba(96, 165, 250, 0.24); background: rgba(96, 165, 250, 0.10); }
+
+
+
+    /* ── Settings utility menu ─────────────────────────────────────────────── */
+    .modal-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+    .modal-menu-btn {
+        background: var(--widget-card);
+        border: 1px solid var(--widget-border);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        color: var(--text-slate-dark);
+        padding: 0;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-menu-btn svg { width: 18px; height: 18px; }
+    .modal-menu-btn:hover { background: var(--widget-border); }
+    .system-panel {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding-right: 0.25rem;
+    }
+    .system-card {
+        background: var(--widget-card);
+        border: 1px solid var(--widget-border);
+        border-radius: 16px;
+        padding: 0.4rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+    }
+    body.dark-mode .system-card { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18); }
+    .system-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem 0.9rem;
+        border-radius: 12px;
+    }
+    .system-row + .system-row { border-top: 1px solid var(--widget-border); border-radius: 0; }
+    .system-copy { text-align: left; min-width: 0; }
+    .system-title {
+        font-size: 0.92rem;
+        font-weight: 900;
+        color: var(--text-slate-dark);
+        margin-bottom: 0.18rem;
+    }
+    .system-desc {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--text-slate-muted);
+    }
+    .system-action-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 1px solid var(--widget-border);
+        background: var(--btn-bg);
+        color: var(--text-slate-dark);
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .system-action-btn svg { width: 20px; height: 20px; }
+    .system-action-btn:hover { transform: translateY(-1px); background: var(--widget-border); }
+    .danger-card { border-color: rgba(239, 68, 68, 0.22); }
+    .system-danger-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 0.7rem 1rem;
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        cursor: pointer;
+        color: #fee2e2;
+        background: linear-gradient(135deg, #991b1b, #7f1d1d);
+        border: 1px solid rgba(248, 113, 113, 0.22);
+        transition: var(--transition);
+    }
+    .system-danger-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .reset-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.45rem;
+        flex-shrink: 0;
+    }
+    .system-keep-btn {
+        border: 1px solid var(--widget-border);
+        border-radius: 999px;
+        padding: 0.7rem 1rem;
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        cursor: pointer;
+        color: var(--text-slate-dark);
+        background: var(--btn-bg);
+        transition: var(--transition);
+    }
+    .system-keep-btn:hover { background: var(--widget-border); transform: translateY(-1px); }
+    .system-danger-btn.confirm-reset {
+        background: linear-gradient(135deg, #dc2626, #991b1b);
+        color: #ffffff;
+        border-color: rgba(248, 113, 113, 0.32);
+    }
+
+
+    .data-card { border-color: rgba(148, 163, 184, 0.22); }
+    .system-button-group {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        flex-shrink: 0;
+    }
+    .system-secondary-btn {
+        border: 1px solid var(--widget-border);
+        border-radius: 999px;
+        padding: 0.7rem 0.9rem;
+        font-size: 0.76rem;
+        font-weight: 900;
+        letter-spacing: 0.55px;
+        text-transform: uppercase;
+        cursor: pointer;
+        color: var(--text-slate-dark);
+        background: var(--btn-bg);
+        transition: var(--transition);
+        white-space: nowrap;
+    }
+    .system-secondary-btn:hover {
+        background: var(--widget-border);
+        transform: translateY(-1px);
+    }
+    .local-data-note {
+        margin-top: 0.3rem;
+        color: var(--text-slate-muted);
+        font-size: 0.73rem;
+        font-weight: 650;
+        line-height: 1.4;
+    }
+    .backup-status {
+        margin-top: 0.55rem;
+        color: var(--leisure-main);
+        font-size: 0.74rem;
+        font-weight: 800;
+        display: none;
+    }
+    .backup-status.error {
+        color: #ef4444;
+    }
+
+    .author-signature {
+        margin-top: -0.35rem;
+        text-align: center;
+        color: var(--text-slate-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 0.62;
+        letter-spacing: 0.2px;
+        user-select: none;
+    }
+
+
+    /* ── Complete reset confirmation popup ─────────────────────────────────── */
+    .reset-popup-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        box-sizing: border-box;
+        background: rgba(248, 250, 252, 0.56);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+        z-index: 30;
+        border-radius: var(--border-radius);
+    }
+    body.dark-mode .reset-popup-overlay { background: rgba(15, 23, 42, 0.58); }
+    .reset-popup-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+    .reset-popup-card {
+        width: min(360px, 100%);
+        background: var(--widget-card);
+        border: 1px solid var(--widget-border);
+        border-radius: 20px;
+        box-shadow: 0 22px 55px rgba(0, 0, 0, 0.28);
+        padding: 1.35rem;
+        transform: scale(0.96) translateY(4px);
+        transition: transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+    .reset-popup-overlay.active .reset-popup-card { transform: scale(1) translateY(0); }
+    .reset-popup-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fecaca;
+        background: linear-gradient(135deg, #991b1b, #7f1d1d);
+        border: 1px solid rgba(248, 113, 113, 0.28);
+        margin-bottom: 0.85rem;
+    }
+    .reset-popup-icon svg { width: 20px; height: 20px; }
+    .reset-popup-title {
+        margin: 0 0 0.45rem;
+        font-size: 1.05rem;
+        font-weight: 950;
+        color: var(--text-slate-dark);
+        letter-spacing: -0.2px;
+    }
+    .reset-popup-text {
+        margin: 0;
+        color: var(--text-slate-muted);
+        font-size: 0.88rem;
+        font-weight: 600;
+        line-height: 1.45;
+    }
+    .reset-popup-actions {
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 1.25rem;
+    }
+    .reset-delete-btn,
+    .reset-cancel-btn {
+        flex: 1;
+        min-height: 42px;
+        border-radius: 999px;
+        padding: 0 0.85rem;
+        font-size: 0.78rem;
+        font-weight: 950;
+        letter-spacing: 0.45px;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    .reset-delete-btn {
+        border: 1px solid rgba(248, 113, 113, 0.30);
+        color: #ffffff;
+        background: linear-gradient(135deg, #dc2626, #991b1b);
+    }
+    .reset-delete-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .reset-cancel-btn {
+        border: 1px solid var(--widget-border);
+        color: var(--text-slate-dark);
+        background: var(--btn-bg);
+    }
+    .reset-cancel-btn:hover { background: var(--widget-border); transform: translateY(-1px); }
+
+    /* ── Name editing ──────────────────────────────────────────────────────── */
+    .editable-player-title { cursor: pointer; }
+    .player-name-input {
+        display: none;
+        width: 8.5rem;
+        max-width: 80%;
+        border: 1px solid var(--widget-border);
+        background: var(--widget-card);
+        color: var(--text-slate-dark);
+        border-radius: 8px;
+        padding: 0.25rem 0.45rem;
+        font: inherit;
+        font-size: 0.86rem;
+        font-weight: 900;
+        text-align: center;
+        letter-spacing: 0.7px;
+        text-transform: none;
+        outline: none;
+    }
+    .player-title.editing .player-name-display { display: none; }
+    .player-title.editing .player-name-input { display: inline-block; }
+
+    /* Hide number spinners if browsers still apply them */
+    .token-input::-webkit-outer-spin-button,
+    .token-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .token-input { -moz-appearance: textfield; appearance: textfield; }
+
+    /* ── Roll chance selector / indicators ─────────────────────────────────── */
+    .rollchance-row { display: flex; }
+    .rollchance-control {
+        display: flex;
+        width: 100%;
+        background: var(--btn-bg);
+        border-radius: 10px;
+        padding: 2px;
+        border: 1px solid var(--widget-border);
+        position: relative;
+    }
+    .rollchance-slider-bg {
+        position: absolute;
+        width: calc((100% - 4px) / 3);
+        height: 34px;
+        background: var(--widget-card);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,var(--shadow-opacity));
+        transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+        z-index: 1;
+        top: 2px;
+        left: 2px;
+    }
+    .rollchance-control[data-chance="low"] .rollchance-slider-bg { transform: translateX(0%); }
+    .rollchance-control[data-chance="normal"] .rollchance-slider-bg { transform: translateX(100%); }
+    .rollchance-control[data-chance="high"] .rollchance-slider-bg { transform: translateX(200%); }
+    .rollchance-lbl {
+        flex: 1;
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .rollchance-lbl input { display: none; }
+    .rollchance-lbl span {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: var(--text-slate-muted);
+        line-height: 1;
+        transition: color 0.25s ease, transform 0.25s ease;
+        user-select: none;
+    }
+    .rollchance-lbl input:checked + span {
+        color: var(--text-slate-dark);
+        transform: translateY(-1px);
+    }
+    .chance-icon {
+        width: 20px;
+        height: 20px;
+        display: block;
+        overflow: visible;
+        color: currentColor;
+    }
+    .chance-icon .chance-line {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .roll-chance-indicator {
+        min-width: 0;
+        width: auto;
+        height: auto;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: 0;
+        color: var(--text-slate-muted);
+        line-height: 1;
+        cursor: default;
+        user-select: none;
+        box-shadow: none;
+    }
+    .roll-chance-indicator .chance-icon {
+        width: 15px;
+        height: 15px;
+        opacity: 0.95;
+    }
+    .roll-chance-indicator.chance-low,
+    .roll-chance-indicator.chance-normal,
+    .roll-chance-indicator.chance-high {
+        color: var(--text-slate-muted);
+        border: none;
+        background: transparent;
+    }
+
+    /* ── Reward reusable selector ───────────────────────────────────────────── */
+    .reusable-row { display: flex; }
+    .reusable-control {
+        display: flex;
+        width: 100%;
+        background: var(--btn-bg);
+        border-radius: 10px;
+        padding: 2px;
+        border: 1px solid var(--widget-border);
+        position: relative;
+    }
+    .reusable-slider-bg {
+        position: absolute;
+        width: calc((100% - 4px) / 2);
+        height: 34px;
+        background: var(--widget-card);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,var(--shadow-opacity));
+        transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+        z-index: 1;
+        top: 2px;
+        left: 2px;
+    }
+    .reusable-control[data-reusable="no"] .reusable-slider-bg { transform: translateX(0%); }
+    .reusable-control[data-reusable="yes"] .reusable-slider-bg { transform: translateX(100%); }
+    .reusable-lbl {
+        flex: 1;
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .reusable-lbl input { display: none; }
+    .reusable-lbl span {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: var(--text-slate-muted);
+        font-size: 0.78rem;
+        font-weight: 900;
+        transition: color 0.25s ease;
+        user-select: none;
+    }
+    .reusable-lbl input:checked + span { color: var(--text-slate-dark); }
+    .reusable-badge {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        margin-top: 0.32rem;
+        padding: 0.14rem 0.42rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.35px;
+        text-transform: uppercase;
+        color: var(--reward-main);
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.20);
+    }
+    .dependency-meta {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        margin-top: 0.32rem;
+        color: var(--text-slate-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+    .dependency-meta.warning {
+        color: var(--reward-main);
+    }
+
+    @media (max-width: 780px) {
+        .app-shell.two-player { width: 360px; }
+        .app-shell.two-player .players-wrap { grid-template-columns: 1fr; }
+    }
+
+
+    /* ── Compact item cards: title first, metadata line below ─────────────── */
+    .edit-item {
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.9rem 0.9rem 0.9rem 1.1rem;
+    }
+    .edit-item-content {
+        min-width: 0;
+        gap: 0.45rem;
+        margin-right: 0.25rem;
+    }
+    .edit-item-text {
+        color: var(--text-slate-dark);
+        font-size: 1rem;
+        font-weight: 850;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+    }
+    .item-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-height: 20px;
+        color: var(--text-slate-muted);
+        font-size: 0.74rem;
+        font-weight: 850;
+        line-height: 1;
+        flex-wrap: wrap;
+    }
+    .meta-anchor {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        color: var(--reward-main);
+        opacity: 0.95;
+    }
+    .meta-anchor svg { width: 16px; height: 16px; }
+    .meta-owner {
+        display: inline-flex;
+        align-items: center;
+        color: var(--text-slate-muted);
+        font-size: 0.74rem;
+        font-weight: 900;
+        letter-spacing: 0.25px;
+        text-transform: none;
+    }
+    .meta-owner.player1 { color: #c084fc; }
+    .meta-owner.both { color: var(--leisure-main); }
+    .meta-owner.player2 { color: #60a5fa; }
+    .app-shell.single-player .meta-owner { display: none; }
+    .roll-chance-indicator {
+        min-width: 0;
+        width: auto;
+        height: auto;
+        padding: 0;
+        border: none;
+        background: transparent;
+        border-radius: 0;
+        color: var(--text-slate-muted);
+        box-shadow: none;
+    }
+    .roll-chance-indicator .chance-icon {
+        width: 15px;
+        height: 15px;
+        opacity: 0.95;
+    }
+    .roll-chance-indicator.chance-low,
+    .roll-chance-indicator.chance-normal,
+    .roll-chance-indicator.chance-high {
+        color: var(--text-slate-muted);
+        border: none;
+        background: transparent;
+    }
+    .item-controls {
+        flex-shrink: 0;
+        align-self: center;
+    }
+    .action-btns {
+        align-items: center;
+    }
+    .action-btns button {
+        width: 34px;
+        height: 34px;
+        font-size: 0;
+    }
+    .action-btns button svg {
+        width: 16px;
+        height: 16px;
+    }
+    .action-btns button.item-edit-btn:hover {
+        color: var(--task-main);
+        border-color: rgba(99, 102, 241, 0.28);
+        background: rgba(99, 102, 241, 0.10);
+    }
+    .action-btns button.item-delete-btn:hover {
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.28);
+        background: rgba(239, 68, 68, 0.10);
+    }
+    .delete-choice {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .delete-choice button {
+        width: auto;
+        min-width: 50px;
+        height: 34px;
+        padding: 0 0.7rem;
+        font-size: 0.74rem;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+    }
+    .delete-choice .delete-sure-btn {
+        color: #ffffff;
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        border-color: transparent;
+    }
+    .delete-choice .delete-sure-btn:hover {
+        filter: brightness(1.08);
+        color: #ffffff;
+        background: linear-gradient(135deg, #f87171, #dc2626);
+        border-color: transparent;
+    }
+    .delete-choice .delete-keep-btn {
+        background: var(--widget-card);
+        color: var(--text-slate-muted);
+        border: 1px solid var(--widget-border);
+    }
+    .delete-choice .delete-keep-btn:hover {
+        background: var(--widget-border);
+        color: var(--text-slate-dark);
+    }
+
+    .edit-item {
+        cursor: pointer;
+    }
+    .edit-item-paused {
+        opacity: 0.56;
+        filter: saturate(0.55);
+    }
+    .edit-item-paused:hover {
+        opacity: 0.68;
+    }
+    .edit-item-paused::before {
+        opacity: 0.35;
+        background: var(--text-slate-muted) !important;
+    }
+    .edit-item-paused .edit-item-text,
+    .edit-item-paused .item-meta-row,
+    .edit-item-paused .dependency-meta {
+        color: var(--text-slate-muted);
+    }
+    .action-btns button.item-pause-btn:hover {
+        color: var(--reward-main);
+        border-color: rgba(245, 158, 11, 0.28);
+        background: rgba(245, 158, 11, 0.10);
+    }
+    .action-btns button.item-resume-btn {
+        color: var(--leisure-main);
+        border-color: rgba(20, 184, 166, 0.22);
+        background: rgba(20, 184, 166, 0.08);
+    }
+    .action-btns button.item-resume-btn:hover {
+        color: var(--leisure-main);
+        border-color: rgba(20, 184, 166, 0.35);
+        background: rgba(20, 184, 166, 0.14);
+    }
+
+    /* ── One-line cards for single-player mode ─────────────────────────────── */
+    .edit-item-single-line .edit-item-content,
+    .edit-item-content.single-line-content {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.45rem;
+        min-width: 0;
+        white-space: nowrap;
+    }
+    .edit-item-single-line .edit-item-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .edit-item-single-line .meta-anchor,
+    .edit-item-single-line .roll-chance-indicator,
+    .edit-item-single-line .dependency-meta {
+        flex-shrink: 0;
+        margin-top: 0;
+    }
+    .edit-item-single-line .dependency-meta {
+        width: auto;
+        max-width: 45%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.70rem;
+    }
+
+</style>
+</head>
+<body>
+
+<div class="app-shell single-player" id="appShell">
+    <div class="app-topbar">
+        <div class="token-display" id="tokenDisplay" onclick="openTokenEditor(event)" title="Edit tokens">
+            <span class="token-icon">🪙</span>
+            <span class="token-count" id="tokenCount">0</span>
+            <input type="text" id="tokenInput" class="token-input" inputmode="numeric" pattern="[0-9]*" value="0" onclick="event.stopPropagation()" onkeydown="handleTokenInputKey(event)" oninput="sanitizeTokenInput(this)" onpaste="handleTokenPaste(event)" onblur="commitTokenInput()">
+        </div>
+
+        <div class="header-icons">
+            <button class="icon-btn settings-btn" id="settingsBtn" onclick="toggleModal()" title="Manage Lists">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="players-wrap" id="playersWrap">
+        
+    <div class="widget player-widget" id="widget-solo" data-player="solo">
+        <div id="confettiContainer-solo" class="confetti-container"></div>
+        <div class="player-title">Solo</div>
+
+        <div class="wheel-window">
+            <div class="wheel" id="wheel-solo">
+                <div class="wheel-item">Ready to roll...</div>
+            </div>
+        </div>
+
+        <div class="toggles" id="toggles-solo">
+            <label class="chip chip-chore">
+                <input type="radio" name="mode-solo" id="modeChores-solo" value="chores" checked onchange="onModeChange('solo')">
+                <span>🧹 Chores</span>
+            </label>
+            <label class="chip chip-leisure" id="leisureChip-solo">
+                <input type="radio" name="mode-solo" id="modeLeisures-solo" value="leisures" onchange="onModeChange('solo')">
+                <span>🌴 Leisures <small class="leisure-cost" style="opacity:0.75">(3🪙)</small></span>
+            </label>
+        </div>
+
+        <div class="action-panel" id="panelSpin-solo">
+            <button class="btn btn-main" id="spinBtn-solo" onclick="drawItem('solo')">🎲 Roll</button>
+        </div>
+
+        <div class="action-panel" id="panelChore-solo" style="display: none;">
+            <button class="btn btn-complete" onclick="resolveItem('solo', 'complete')">✅ Complete</button>
+            <button class="btn btn-reroll" id="rerollChoreBtn-solo" onclick="resolveItem('solo', 'reroll')">🎲 Reroll</button>
+        </div>
+    </div>
+
+        
+    <div class="widget player-widget" id="widget-player1" data-player="player1">
+        <div id="confettiContainer-player1" class="confetti-container"></div>
+        <div class="player-title editable-player-title" id="playerTitle-player1" onclick="openPlayerNameEditor('player1', event)" title="Edit name">
+            <span class="player-name-display" id="playerName-player1">Player 1</span>
+            <input class="player-name-input" id="playerNameInput-player1" type="text" onclick="event.stopPropagation()" onkeydown="handlePlayerNameInputKey(event, 'player1')" onblur="commitPlayerName('player1')">
+        </div>
+
+        <div class="wheel-window">
+            <div class="wheel" id="wheel-player1">
+                <div class="wheel-item">Ready to roll...</div>
+            </div>
+        </div>
+
+        <div class="toggles" id="toggles-player1">
+            <label class="chip chip-chore">
+                <input type="radio" name="mode-player1" id="modeChores-player1" value="chores" checked onchange="onModeChange('player1')">
+                <span>🧹 Chores</span>
+            </label>
+            <label class="chip chip-leisure" id="leisureChip-player1">
+                <input type="radio" name="mode-player1" id="modeLeisures-player1" value="leisures" onchange="onModeChange('player1')">
+                <span>🌴 Leisures <small class="leisure-cost" style="opacity:0.75">(3🪙)</small></span>
+            </label>
+        </div>
+
+        <div class="action-panel" id="panelSpin-player1">
+            <button class="btn btn-main" id="spinBtn-player1" onclick="drawItem('player1')">🎲 Roll</button>
+        </div>
+
+        <div class="action-panel" id="panelChore-player1" style="display: none;">
+            <button class="btn btn-complete" onclick="resolveItem('player1', 'complete')">✅ Complete</button>
+            <button class="btn btn-reroll" id="rerollChoreBtn-player1" onclick="resolveItem('player1', 'reroll')">🎲 Reroll</button>
+        </div>
+    </div>
+
+        
+    <div class="widget player-widget" id="widget-player2" data-player="player2">
+        <div id="confettiContainer-player2" class="confetti-container"></div>
+        <div class="player-title editable-player-title" id="playerTitle-player2" onclick="openPlayerNameEditor('player2', event)" title="Edit name">
+            <span class="player-name-display" id="playerName-player2">Player 2</span>
+            <input class="player-name-input" id="playerNameInput-player2" type="text" onclick="event.stopPropagation()" onkeydown="handlePlayerNameInputKey(event, 'player2')" onblur="commitPlayerName('player2')">
+        </div>
+
+        <div class="wheel-window">
+            <div class="wheel" id="wheel-player2">
+                <div class="wheel-item">Ready to roll...</div>
+            </div>
+        </div>
+
+        <div class="toggles" id="toggles-player2">
+            <label class="chip chip-chore">
+                <input type="radio" name="mode-player2" id="modeChores-player2" value="chores" checked onchange="onModeChange('player2')">
+                <span>🧹 Chores</span>
+            </label>
+            <label class="chip chip-leisure" id="leisureChip-player2">
+                <input type="radio" name="mode-player2" id="modeLeisures-player2" value="leisures" onchange="onModeChange('player2')">
+                <span>🌴 Leisures <small class="leisure-cost" style="opacity:0.75">(3🪙)</small></span>
+            </label>
+        </div>
+
+        <div class="action-panel" id="panelSpin-player2">
+            <button class="btn btn-main" id="spinBtn-player2" onclick="drawItem('player2')">🎲 Roll</button>
+        </div>
+
+        <div class="action-panel" id="panelChore-player2" style="display: none;">
+            <button class="btn btn-complete" onclick="resolveItem('player2', 'complete')">✅ Complete</button>
+            <button class="btn btn-reroll" id="rerollChoreBtn-player2" onclick="resolveItem('player2', 'reroll')">🎲 Reroll</button>
+        </div>
+    </div>
+
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Manage Lists</h2>
+                <div class="modal-header-actions">
+                    <button class="modal-menu-btn" id="settingsMenuBtn" onclick="toggleSettingsMenu()" title="App settings" aria-label="App settings"></button>
+                    <button class="close-btn" onclick="toggleModal()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                </div>
+            </div>
+
+            <div class="system-panel" id="systemPanel" style="display:none;">
+                <div class="system-card">
+                    <div class="system-row">
+                        <div class="system-copy">
+                            <div class="system-title">Appearance</div>
+                            <div class="system-desc" id="appearanceDesc">Dark mode</div>
+                        </div>
+                        <button class="system-action-btn" id="systemThemeBtn" onclick="toggleTheme(); renderSystemSettings();"></button>
+                    </div>
+                    <div class="system-row">
+                        <div class="system-copy">
+                            <div class="system-title">Sound</div>
+                            <div class="system-desc" id="soundDesc">Wheel clicks on</div>
+                        </div>
+                        <button class="system-action-btn" id="systemSoundBtn" onclick="toggleSound()"></button>
+                    </div>
+                    <div class="system-row">
+                        <div class="system-copy">
+                            <div class="system-title">Player mode</div>
+                            <div class="system-desc" id="playerModeDesc">Single player</div>
+                        </div>
+                        <button class="system-action-btn" id="systemPlayerModeBtn" onclick="togglePlayerMode()"></button>
+                    </div>
+                </div>
+
+                <div class="system-card data-card">
+                    <div class="system-row">
+                        <div class="system-copy">
+                            <div class="system-title">Backup & restore</div>
+                            <div class="system-desc">Export or import your saved setup.</div>
+                            <div class="local-data-note">All list data is saved only in this browser. It can be lost if you clear site data, change browser/device, or use private mode. Export a backup to keep a copy. This page only counts anonymous opens, rolls, rerolls and completions by mode/category; your lists are never sent.</div>
+                            <div class="backup-status" id="backupStatus"></div>
+                        </div>
+                        <div class="system-button-group">
+                            <button class="system-secondary-btn" onclick="exportBackup()">Export</button>
+                            <button class="system-secondary-btn" onclick="triggerBackupImport()">Import</button>
+                            <input type="file" id="backupImportInput" accept="application/json,.json" style="display:none" onchange="handleBackupImport(event)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="system-card danger-card">
+                    <div class="system-row">
+                        <div class="system-copy">
+                            <div class="system-title">Complete reset</div>
+                            <div class="system-desc">Start over from a blank system.</div>
+                        </div>
+                        <div class="reset-actions" id="resetActions">
+                            <button class="system-danger-btn" onclick="requestFullReset()">Reset</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="author-signature">by Gergő Kiss</div>
+            </div>
+
+            <div class="reset-popup-overlay" id="resetPopup" role="dialog" aria-modal="true" aria-labelledby="resetPopupTitle">
+                <div class="reset-popup-card">
+                    <div class="reset-popup-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <h3 class="reset-popup-title" id="resetPopupTitle">Delete everything?</h3>
+                    <p class="reset-popup-text">This cannot be undone. It will remove all chores, rewards, leisures, tokens, player names, modes and settings.</p>
+                    <div class="reset-popup-actions">
+                        <button class="reset-delete-btn" onclick="performFullReset()">Delete everything</button>
+                        <button class="reset-cancel-btn" onclick="cancelFullReset()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tabs" role="radiogroup" aria-label="Manage category">
+                <label class="tab-btn active-chores" id="tab-chores">
+                    <input type="radio" name="settingsCategory" value="chores" checked onchange="switchTab('chores')">
+                    🧹 Chores
+                </label>
+                <label class="tab-btn" id="tab-leisures">
+                    <input type="radio" name="settingsCategory" value="leisures" onchange="switchTab('leisures')">
+                    🌴 Leisures
+                </label>
+            </div>
+
+            <div class="section-tools" id="sectionTools">
+                <div class="section-label" id="sectionLabel">Chores</div>
+                <div class="subtabs" id="choreSubtabs" role="radiogroup" aria-label="Chore type">
+                    <label class="subtab-btn active-task" id="subtab-task">
+                        <input type="radio" name="choreSubtab" value="task" checked onchange="switchChoreSubtab('task')">
+                        Tasks
+                    </label>
+                    <label class="subtab-btn" id="subtab-reward">
+                        <input type="radio" name="choreSubtab" value="reward" onchange="switchChoreSubtab('reward')">
+                        Rewards
+                    </label>
+                </div>
+            </div>
+
+            <div class="edit-list-container" id="editList"></div>
+
+            <div class="add-item-row" id="addItemRow">
+                <button class="btn-add-new" id="openFormBtn" onclick="openAddForm()">+ New task</button>
+            </div>
+
+            <div class="form-group" id="editForm" style="display:none;">
+                <div class="form-field">
+                    <div class="field-label">Name</div>
+                    <input type="text" id="itemTextInput" placeholder="Add new task..." onkeypress="handleEnter(event)">
+                </div>
+
+                <div class="form-field owner-row" id="ownerRow">
+                    <div class="field-label">Assigned to</div>
+                    <div class="owner-control" id="ownerControl" data-owner="both">
+                        <div class="owner-slider-bg"></div>
+                        <label class="owner-lbl">
+                            <input type="radio" name="ownerSelect" value="player1" onchange="updateOwnerSlider()">
+                            <span id="ownerLabel-player1">Player 1</span>
+                        </label>
+                        <label class="owner-lbl">
+                            <input type="radio" name="ownerSelect" value="both" checked onchange="updateOwnerSlider()">
+                            <span>Both</span>
+                        </label>
+                        <label class="owner-lbl">
+                            <input type="radio" name="ownerSelect" value="player2" onchange="updateOwnerSlider()">
+                            <span id="ownerLabel-player2">Player 2</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-field rollchance-row" id="rollChanceRow">
+                    <div class="field-label">Roll chance</div>
+                    <div class="rollchance-control" id="rollChanceControl" data-chance="normal">
+                        <div class="rollchance-slider-bg"></div>
+                        <label class="rollchance-lbl" title="Rare roll chance">
+                            <input type="radio" name="rollChanceSelect" value="low" onchange="updateRollChanceSlider()">
+                            <span><svg class="chance-icon chance-low" viewBox="0 0 24 24" aria-hidden="true"><path class="chance-line" d="M7 9.5L12 14.5L17 9.5"/></svg></span>
+                        </label>
+                        <label class="rollchance-lbl" title="Normal roll chance">
+                            <input type="radio" name="rollChanceSelect" value="normal" checked onchange="updateRollChanceSlider()">
+                            <span><svg class="chance-icon chance-normal" viewBox="0 0 24 24" aria-hidden="true"><path class="chance-line" d="M7.5 12H16.5"/></svg></span>
+                        </label>
+                        <label class="rollchance-lbl" title="Often roll chance">
+                            <input type="radio" name="rollChanceSelect" value="high" onchange="updateRollChanceSlider()">
+                            <span><svg class="chance-icon chance-high" viewBox="0 0 24 24" aria-hidden="true"><path class="chance-line" d="M7 14.5L12 9.5L17 14.5"/></svg></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-field" id="dependencyRow">
+                    <div class="field-label">Wait for</div>
+                    <select id="parentSelect">
+                        <option value="">No dependency</option>
+                    </select>
+                </div>
+
+                <div class="form-field reusable-row" id="reusableRow" style="display:none;">
+                    <div class="field-label">Reward type</div>
+                    <div class="reusable-control" id="reusableControl" data-reusable="no">
+                        <div class="reusable-slider-bg"></div>
+                        <label class="reusable-lbl">
+                            <input type="radio" name="reusableSelect" value="no" checked onchange="updateReusableSlider()">
+                            <span>One-time</span>
+                        </label>
+                        <label class="reusable-lbl">
+                            <input type="radio" name="reusableSelect" value="yes" onchange="updateReusableSlider()">
+                            <span>Reusable</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-notice" id="formNotice"></div>
+                <div class="form-row">
+                    <button class="btn-save" id="saveBtn" onclick="saveFormItem()">Add Item</button>
+                    <button class="btn-cancel" id="cancelBtn" onclick="resetForm()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // ── Audio ──────────────────────────────────────────────────────────────────
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!soundEnabled) return;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    const SPIN_DURATION = 3.5;
+    const SPIN_EASING = 'cubic-bezier(0.12, 0.78, 0.18, 1)';
+    const SPIN_EASING_POINTS = { x1: 0.12, y1: 0.78, x2: 0.18, y2: 1.00 };
+
+    function cubicBezierCoord(t, p1, p2) {
+        const inv = 1 - t;
+        return 3 * inv * inv * t * p1 + 3 * inv * t * t * p2 + t * t * t;
+    }
+
+    function cubicBezierSlope(t, p1, p2) {
+        const inv = 1 - t;
+        return 3 * inv * inv * p1 + 6 * inv * t * (p2 - p1) + 3 * t * t * (1 - p2);
+    }
+
+    function spinEase(x) {
+        const c = SPIN_EASING_POINTS;
+        let t = Math.max(0, Math.min(1, x));
+        for (let i = 0; i < 7; i++) {
+            const xEstimate = cubicBezierCoord(t, c.x1, c.x2);
+            const slope = cubicBezierSlope(t, c.x1, c.x2);
+            if (Math.abs(slope) < 0.00001) break;
+            t -= (xEstimate - x) / slope;
+            t = Math.max(0, Math.min(1, t));
+        }
+        return cubicBezierCoord(t, c.y1, c.y2);
+    }
+
+    function inverseSpinEase(target) {
+        let low = 0;
+        let high = 1;
+        for (let i = 0; i < 24; i++) {
+            const mid = (low + high) / 2;
+            if (spinEase(mid) < target) low = mid;
+            else high = mid;
+        }
+        return (low + high) / 2;
+    }
+
+    function playIronRatchetClick(time, intensity = 1) {
+        if (!soundEnabled || !audioCtx) return;
+
+        const now = audioCtx.currentTime;
+        const t = Math.max(time, now + 0.002);
+        const master = audioCtx.createGain();
+        master.gain.setValueAtTime(0.0001, t);
+        master.gain.linearRampToValueAtTime(0.88 * intensity, t + 0.0008);
+        master.gain.exponentialRampToValueAtTime(0.001, t + 0.032);
+        master.connect(audioCtx.destination);
+
+        const burstLength = 0.0048;
+        const sampleRate = audioCtx.sampleRate;
+        const buffer = audioCtx.createBuffer(1, Math.max(1, Math.floor(sampleRate * burstLength)), sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < data.length; i++) {
+            const p = i / data.length;
+            const envelope = Math.pow(1 - p, 30);
+            data[i] = (Math.random() * 2 - 1) * envelope;
+        }
+
+        const strike = audioCtx.createBufferSource();
+        const highpass = audioCtx.createBiquadFilter();
+        const bite = audioCtx.createBiquadFilter();
+        const strikeGain = audioCtx.createGain();
+
+        strike.buffer = buffer;
+        highpass.type = 'highpass';
+        highpass.frequency.setValueAtTime(4800, t);
+        bite.type = 'peaking';
+        bite.frequency.setValueAtTime(7200 + Math.random() * 550, t);
+        bite.Q.setValueAtTime(14, t);
+        bite.gain.setValueAtTime(14, t);
+        strikeGain.gain.setValueAtTime(0.36 * intensity, t);
+        strikeGain.gain.exponentialRampToValueAtTime(0.001, t + burstLength);
+
+        strike.connect(highpass);
+        highpass.connect(bite);
+        bite.connect(strikeGain);
+        strikeGain.connect(master);
+        strike.start(t);
+        strike.stop(t + burstLength);
+
+        [
+            { freq: 1380 + Math.random() * 70, gain: 0.060, dur: 0.018, type: 'square' },
+            { freq: 2860 + Math.random() * 130, gain: 0.035, dur: 0.014, type: 'triangle' },
+            { freq: 5150 + Math.random() * 220, gain: 0.018, dur: 0.010, type: 'sawtooth' }
+        ].forEach(part => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            osc.type = part.type;
+            osc.frequency.setValueAtTime(part.freq, t);
+            osc.detune.setValueAtTime((Math.random() - 0.5) * 10, t);
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(part.freq, t);
+            filter.Q.setValueAtTime(10, t);
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.linearRampToValueAtTime(part.gain * intensity, t + 0.0009);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + part.dur);
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(master);
+            osc.start(t);
+            osc.stop(t + part.dur + 0.004);
+        });
+
+        const bodyOsc = audioCtx.createOscillator();
+        const bodyGain = audioCtx.createGain();
+        bodyOsc.type = 'square';
+        bodyOsc.frequency.setValueAtTime(520 + Math.random() * 30, t);
+        bodyGain.gain.setValueAtTime(0.025 * intensity, t);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
+        bodyOsc.connect(bodyGain);
+        bodyGain.connect(master);
+        bodyOsc.start(t);
+        bodyOsc.stop(t + 0.014);
+    }
+
+    function playWheelRattle(duration = SPIN_DURATION, toothCount = 25) {
+        if (!soundEnabled || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        for (let tooth = 1; tooth < toothCount; tooth++) {
+            const visualProgress = tooth / toothCount;
+            const rawProgress = inverseSpinEase(visualProgress);
+            const clickTime = now + rawProgress * duration;
+            if (clickTime > now + duration - 0.08) continue;
+            const intensity = Math.max(0.42, 1 - visualProgress * 0.44);
+            playIronRatchetClick(clickTime, intensity);
+        }
+    }
+
+    function playWheelStop() {
+        if (!soundEnabled || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        playIronRatchetClick(now + 0.004, 1.05);
+        playIronRatchetClick(now + 0.092, 0.28);
+    }
+
+    function playChime() {
+        if (!soundEnabled || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        [659.25, 783.99, 987.77].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const t = now + i * 0.055;
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.linearRampToValueAtTime(0.11, t + 0.018);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.6);
+        });
+    }
+
+    // ── UI constants ───────────────────────────────────────────────────────────
+    const LEISURE_COST = 3;
+    const PLAYERS = ['solo', 'player1', 'player2'];
+
+    // ── Anonymous usage counters ──────────────────────────────────────────────
+    // Sends only event type + mode/category. It never sends list text, tokens,
+    // player names, settings, localStorage contents or backup data.
+    const ANALYTICS_ENDPOINT = 'https://rolling-draw-counter.pih3g6nsn.workers.dev/track';
+    const ANALYTICS_EVENTS = new Set(['open', 'roll', 'reroll', 'complete']);
+    const ANALYTICS_CATEGORIES = new Set(['task', 'reward', 'leisure']);
+    const analyticsInFlightImages = [];
+
+    function analyticsModeFromPlayer(playerId = '') {
+        if (playerId === 'solo') return '1p';
+        if (playerId === 'player1' || playerId === 'player2') return '2p';
+        return currentPlayerMode === 'two' ? '2p' : '1p';
+    }
+
+    function normalizeAnalyticsCategory(category) {
+        if (category === 'tasks' || category === 'chore' || category === 'chores') return 'task';
+        if (category === 'rewards') return 'reward';
+        if (category === 'leisures') return 'leisure';
+        return ANALYTICS_CATEGORIES.has(category) ? category : '';
+    }
+
+    function analyticsCategoryFromItem(item) {
+        if (!item) return '';
+        if (item.category === 'leisures' || item.category === 'leisure') return 'leisure';
+        if (item.subcat === 'reward') return 'reward';
+        return 'task';
+    }
+
+    function trackUsageEvent(eventName, options = {}) {
+        if (!ANALYTICS_EVENTS.has(eventName)) return;
+
+        const opts = typeof options === 'string' ? { category: options } : (options || {});
+        const mode = opts.mode === '2p' || opts.mode === '1p' ? opts.mode : analyticsModeFromPlayer(opts.playerId);
+        const category = normalizeAnalyticsCategory(opts.category || '');
+
+        if (eventName !== 'open' && !category) return;
+
+        try {
+            const params = new URLSearchParams();
+            params.set('event', eventName);
+            params.set('mode', mode);
+            if (category) params.set('category', category);
+            params.set('t', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+            const img = new Image(1, 1);
+            img.alt = '';
+            img.style.position = 'absolute';
+            img.style.width = '1px';
+            img.style.height = '1px';
+            img.style.opacity = '0';
+            img.style.pointerEvents = 'none';
+            img.style.left = '-9999px';
+
+            const cleanup = () => {
+                const index = analyticsInFlightImages.indexOf(img);
+                if (index !== -1) analyticsInFlightImages.splice(index, 1);
+                if (img.parentNode) img.parentNode.removeChild(img);
+            };
+
+            img.onload = cleanup;
+            img.onerror = cleanup;
+            analyticsInFlightImages.push(img);
+
+            const src = `${ANALYTICS_ENDPOINT}?${params.toString()}`;
+            if (document.body) document.body.appendChild(img);
+            img.src = src;
+        } catch (error) {
+            // Analytics must never interrupt the widget.
+        }
+    }
+    const DEFAULT_PLAYER_NAMES = { player1: 'Player 1', player2: 'Player 2' };
+    const WIDGET_STORAGE_KEYS = [
+        'rollingDrawPublicDataV1', 'rollingDrawPublicDataV1_ts',
+        'rollingDrawPublicDataLegacyV6', 'rollingDrawPublicDataLegacyV6_ts',
+        'rollingDrawPublicDataLegacyV5', 'rollingDrawPublicDataLegacyV5_ts',
+        'rollingDrawPublicTokens', 'rollingDrawPublicTheme', 'rollingDrawPublicPlayerMode',
+        'rollingDrawPublicLeisureCooldownId', 'rollingDrawPublicSound',
+        'rollingDrawPublicPlayerName1', 'rollingDrawPublicPlayerName2'
+    ];
+
+    let playerNames = loadPlayerNames();
+    let soundEnabled = localStorage.getItem('rollingDrawPublicSound') !== 'off';
+
+    function loadPlayerNames() {
+        return {
+            player1: localStorage.getItem('rollingDrawPublicPlayerName1') || DEFAULT_PLAYER_NAMES.player1,
+            player2: localStorage.getItem('rollingDrawPublicPlayerName2') || DEFAULT_PLAYER_NAMES.player2
+        };
+    }
+
+    function getOwnerLabel(owner) {
+        if (owner === 'player1') return playerNames.player1 || DEFAULT_PLAYER_NAMES.player1;
+        if (owner === 'player2') return playerNames.player2 || DEFAULT_PLAYER_NAMES.player2;
+        return 'Both';
+    }
+
+    // ── Theme ──────────────────────────────────────────────────────────────────
+    const sunSVG  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+    const moonSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    const onePlayerSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+    const twoPlayerSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`;
+    const slidersSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>`;
+    const listSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`;
+    const volumeOnSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+    const volumeOffSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+    const pauseItemSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>`;
+    const playItemSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>`;
+    const trashItemSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+    const anchorItemSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"></circle><line x1="12" y1="8" x2="12" y2="21"></line><path d="M5 12H3a9 9 0 0 0 18 0h-2"></path><path d="M5 12l3 3"></path><path d="M19 12l-3 3"></path></svg>`;
+
+    const themeBtn = document.getElementById('themeBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const playerModeBtn = document.getElementById('playerModeBtn');
+    const settingsMenuBtn = document.getElementById('settingsMenuBtn');
+    const appShell = document.getElementById('appShell');
+
+    const savedTheme = localStorage.getItem('rollingDrawPublicTheme');
+    const shouldUseDark = savedTheme ? savedTheme === 'dark' : true;
+    if (shouldUseDark) document.body.classList.add('dark-mode');
+
+    function updateThemeIcon() {
+        const dark = document.body.classList.contains('dark-mode');
+        if (themeBtn) themeBtn.innerHTML = dark ? sunSVG : moonSVG;
+    }
+    updateThemeIcon();
+
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const dark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('rollingDrawPublicTheme', dark ? 'dark' : 'light');
+        updateThemeIcon();
+        renderSystemSettings();
+    }
+
+    // ── Confetti ───────────────────────────────────────────────────────────────
+    let activeConfettiCount = 0;
+    const MAX_CONFETTI = 80;
+
+    function fireConfetti(playerId = 'solo') {
+        const container = document.getElementById(`confettiContainer-${playerId}`);
+        if (!container) return;
+        const colors = ['#4ade80', '#16a34a', '#fbbf24', '#3949ab'];
+        const particleCount = 40;
+        if (activeConfettiCount + particleCount > MAX_CONFETTI) return;
+
+        for (let i = 0; i < particleCount; i++) {
+            activeConfettiCount++;
+            const conf = document.createElement('div');
+            conf.style.cssText = `position:absolute;width:${Math.random()*8+4}px;height:${Math.random()*8+4}px;background-color:${colors[Math.floor(Math.random()*colors.length)]};left:50%;top:70%;border-radius:${Math.random()>0.5?'50%':'2px'};`;
+            const vx = (Math.random()-0.5)*15, vy = (Math.random()-1)*15;
+            let x=0,y=0,rot=0,opacity=1,frame=0;
+            container.appendChild(conf);
+            (function animate() {
+                x+=vx; y+=vy+(frame*0.3); rot+=vx*3; opacity-=0.02;
+                conf.style.transform=`translate(${x}px,${y}px) rotate(${rot}deg)`;
+                conf.style.opacity=opacity;
+                if(opacity>0) requestAnimationFrame(animate);
+                else { conf.remove(); activeConfettiCount--; }
+                frame++;
+            })();
+        }
+    }
+
+    // ── Token system ───────────────────────────────────────────────────────────
+    function getTokens() {
+        return parseInt(localStorage.getItem('rollingDrawPublicTokens') || '0', 10);
+    }
+
+    function setTokens(n) {
+        const val = Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0);
+        localStorage.setItem('rollingDrawPublicTokens', val.toString());
+        renderTokens(val);
+        updateLeisureLock(val);
+    }
+
+    function addTokens(n) { setTokens(getTokens() + n); }
+
+    function trySpendTokens(n) {
+        const current = getTokens();
+        if (current < n) return false;
+        setTokens(current - n);
+        return true;
+    }
+
+    function renderTokens(val) {
+        document.getElementById('tokenCount').textContent = val;
+        const input = document.getElementById('tokenInput');
+        const disp = document.getElementById('tokenDisplay');
+        if (input && !disp.classList.contains('editing')) input.value = val;
+        disp.classList.remove('bump');
+        void disp.offsetWidth;
+        disp.classList.add('bump');
+        setTimeout(() => disp.classList.remove('bump'), 300);
+    }
+
+    function openTokenEditor(event) {
+        if (event) event.stopPropagation();
+        if (isSpinning) return;
+        const disp = document.getElementById('tokenDisplay');
+        const input = document.getElementById('tokenInput');
+        input.value = getTokens();
+        disp.classList.add('editing');
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+    }
+
+    function commitTokenInput() {
+        const disp = document.getElementById('tokenDisplay');
+        if (!disp.classList.contains('editing')) return;
+        const input = document.getElementById('tokenInput');
+        input.value = String(input.value || '').replace(/\D/g, '');
+        const parsed = parseInt(input.value, 10);
+        const nextValue = Number.isFinite(parsed) ? Math.max(0, parsed) : getTokens();
+        disp.classList.remove('editing');
+        setTokens(nextValue);
+    }
+
+    function sanitizeTokenInput(input) {
+        input.value = String(input.value || '').replace(/\D/g, '');
+    }
+
+    function handleTokenPaste(event) {
+        event.preventDefault();
+        const pasted = (event.clipboardData || window.clipboardData).getData('text') || '';
+        event.target.value = pasted.replace(/\D/g, '');
+    }
+
+    function handleTokenInputKey(event) {
+        const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End'];
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            event.target.blur();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.target.value = getTokens();
+            document.getElementById('tokenDisplay').classList.remove('editing');
+        } else if ((event.ctrlKey || event.metaKey) && ['a', 'c', 'v', 'x'].includes(event.key.toLowerCase())) {
+            return;
+        } else if (!/^\d$/.test(event.key) && !allowedKeys.includes(event.key)) {
+            event.preventDefault();
+        }
+    }
+
+    function updateLeisureCostLabels() {
+        document.querySelectorAll('.leisure-cost').forEach(el => {
+            el.textContent = `(${LEISURE_COST}🪙)`;
+        });
+    }
+
+    function updateLeisureLock(tokens = getTokens()) {
+        const canAfford = tokens >= LEISURE_COST;
+        PLAYERS.forEach(playerId => {
+            const chip = document.getElementById(`leisureChip-${playerId}`);
+            const radio = document.getElementById(`modeLeisures-${playerId}`);
+            if (!chip || !radio) return;
+            chip.classList.toggle('locked', !canAfford);
+            radio.disabled = !canAfford;
+            if (!canAfford && radio.checked && !isSpinning) {
+                document.getElementById(`modeChores-${playerId}`).checked = true;
+            }
+            updateSpinButtonState(playerId);
+        });
+    }
+
+    // ── Data ───────────────────────────────────────────────────────────────────
+    function generateId() { return Math.random().toString(36).substr(2, 9); }
+    function cloneDefault() { return JSON.parse(JSON.stringify(defaultData)); }
+
+    const defaultData = {
+        chores: [
+            { id: "t1", text: "Tidy-up",              parentId: "",   priority: "high",   subcat: "task",   owner: "both" },
+            { id: "t2", text: "Vacuum",               parentId: "t1", priority: "normal", subcat: "task",   owner: "player1" },
+            { id: "t3", text: "Dust",                 parentId: "t2", priority: "low",    subcat: "task",   owner: "player2" },
+            { id: "t4", text: "Take out the trash",   parentId: "",   priority: "high",   subcat: "task",   owner: "both" },
+            { id: "r1", text: "1 block of chocolate", parentId: "",   priority: "normal", subcat: "reward", owner: "both",    reusable: false },
+            { id: "r2", text: "A game of chess",      parentId: "",   priority: "normal", subcat: "reward", owner: "player1", reusable: true }
+        ],
+        leisures: [
+            { id: "l1", text: "Watch Breaking Bad",         parentId: "", priority: "normal", owner: "both" },
+            { id: "l2", text: "Read Crime and Punishment",  parentId: "", priority: "low",    owner: "player1" },
+            { id: "l3", text: "Play GTA VI",                parentId: "", priority: "high",   owner: "player2" }
+        ]
+    };
+
+    const categoryColors = {
+        task: "var(--task-main)",
+        reward: "var(--reward-main)",
+        leisures: "var(--leisure-main)"
+    };
+
+    function itemExists(items, id) {
+        return items.some(item => item.id === id);
+    }
+
+    function normalizeOwner(owner) {
+        return ['player1', 'both', 'player2'].includes(owner) ? owner : 'both';
+    }
+
+    function wouldCreateCycle(itemId, parentId, items) {
+        if (!itemId || !parentId) return false;
+        const byId = new Map(items.map(item => [item.id, item]));
+        let cursor = parentId;
+        const visited = new Set();
+        while (cursor) {
+            if (cursor === itemId) return true;
+            if (visited.has(cursor)) return true;
+            visited.add(cursor);
+            cursor = byId.get(cursor)?.parentId || "";
+        }
+        return false;
+    }
+
+    function getDescendantIds(itemId, items) {
+        const childrenByParent = new Map();
+        items.forEach(item => {
+            const key = item.parentId || "";
+            if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+            childrenByParent.get(key).push(item);
+        });
+
+        const descendants = new Set();
+        function walk(id) {
+            (childrenByParent.get(id) || []).forEach(child => {
+                if (!descendants.has(child.id)) {
+                    descendants.add(child.id);
+                    walk(child.id);
+                }
+            });
+        }
+        walk(itemId);
+        return descendants;
+    }
+
+    function normalizeData(data) {
+        const fallback = cloneDefault();
+        const safe = {
+            chores: Array.isArray(data?.chores) ? data.chores : fallback.chores,
+            leisures: Array.isArray(data?.leisures) ? data.leisures : fallback.leisures
+        };
+
+        safe.chores = safe.chores.map(item => ({
+            id: item.id || generateId(),
+            text: String(item.text || '').trim() || 'Untitled chore',
+            parentId: item.parentId || '',
+            priority: ['low', 'normal', 'high'].includes(item.priority) ? item.priority : 'normal',
+            subcat: item.subcat === 'reward' ? 'reward' : 'task',
+            owner: normalizeOwner(item.owner),
+            reusable: item.subcat === 'reward' ? Boolean(item.reusable) : false,
+            disabled: Boolean(item.disabled)
+        }));
+
+        safe.leisures = safe.leisures.map(item => ({
+            id: item.id || generateId(),
+            text: String(item.text || '').trim() || 'Untitled leisure',
+            parentId: '',
+            priority: ['low', 'normal', 'high'].includes(item.priority) ? item.priority : 'normal',
+            owner: normalizeOwner(item.owner),
+            disabled: Boolean(item.disabled)
+        }));
+
+        const choreIds = new Set(safe.chores.map(item => item.id));
+        safe.chores.forEach(item => {
+            if (!item.parentId || !choreIds.has(item.parentId) || wouldCreateCycle(item.id, item.parentId, safe.chores)) {
+                item.parentId = '';
+            }
+        });
+
+        return safe;
+    }
+
+    function migrateLegacyData(raw) {
+        if (!raw) return cloneDefault();
+        if (Array.isArray(raw.chores)) return normalizeData(raw);
+
+        const chores = [];
+        if (Array.isArray(raw.tasks)) {
+            raw.tasks.forEach(item => chores.push({ ...item, subcat: item.subcat || 'task', owner: item.owner || 'both' }));
+        }
+        if (Array.isArray(raw.rewards)) {
+            raw.rewards.forEach(item => chores.push({ ...item, subcat: 'reward', owner: item.owner || 'both', reusable: Boolean(item.reusable) }));
+        }
+
+        return normalizeData({
+            chores: chores.length ? chores : cloneDefault().chores,
+            leisures: Array.isArray(raw.leisures) ? raw.leisures : cloneDefault().leisures
+        });
+    }
+
+    function safeParse(json) {
+        try { return json ? JSON.parse(json) : null; }
+        catch { return null; }
+    }
+
+    function loadData() {
+        const storedV7 = safeParse(localStorage.getItem('rollingDrawPublicDataV1'));
+        if (storedV7) return normalizeData(storedV7);
+
+        const storedV6 = safeParse(localStorage.getItem('rollingDrawPublicDataLegacyV6'));
+        if (storedV6) return normalizeData(storedV6);
+
+        const storedV5 = safeParse(localStorage.getItem('rollingDrawPublicDataLegacyV5'));
+        if (storedV5) return migrateLegacyData(storedV5);
+
+        return cloneDefault();
+    }
+
+    let appData = loadData();
+    let currentTab = 'chores';
+    let currentChoreSubtab = 'task';
+    let currentPlayerMode = localStorage.getItem('rollingDrawPublicPlayerMode') === 'two' ? 'two' : 'single';
+    let isSpinning = false;
+    let lockedModesDuringSpin = {};
+    let editingId = null;
+    let activeDrawnItems = { solo: null, player1: null, player2: null };
+    let pendingDeleteId = null;
+    let pendingDeleteTimer = null;
+    let pendingResetTimer = null;
+    const spinButtonHintTimers = {};
+    let leisureCooldownId = localStorage.getItem('rollingDrawPublicLeisureCooldownId') || null;
+    let choreCooldownIds = new Set();
+
+    function saveToLocal() {
+        appData = normalizeData(appData);
+        localStorage.setItem('rollingDrawPublicDataV1', JSON.stringify(appData));
+        localStorage.setItem('rollingDrawPublicDataV1_ts', Date.now().toString());
+    }
+
+    function setFormNotice(message = '') {
+        const notice = document.getElementById('formNotice');
+        notice.textContent = message;
+        notice.style.display = message ? 'block' : 'none';
+    }
+
+    function showBackupStatus(message, isError = false) {
+        const status = document.getElementById('backupStatus');
+        if (!status) return;
+        status.textContent = message;
+        status.classList.toggle('error', Boolean(isError));
+        status.style.display = message ? 'block' : 'none';
+        if (message) {
+            clearTimeout(showBackupStatus._timer);
+            showBackupStatus._timer = setTimeout(() => {
+                status.style.display = 'none';
+            }, 4200);
+        }
+    }
+
+    function buildBackupPayload() {
+        return {
+            app: 'rolling-draw-widget',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            data: normalizeData(appData),
+            tokens: getTokens(),
+            playerMode: currentPlayerMode,
+            playerNames: {
+                player1: getOwnerLabel('player1'),
+                player2: getOwnerLabel('player2')
+            },
+            theme: document.body.classList.contains('dark-mode') ? 'dark' : 'light',
+            soundEnabled,
+            leisureCooldownId: leisureCooldownId || null
+        };
+    }
+
+    function exportBackup() {
+        const payload = buildBackupPayload();
+        const date = new Date().toISOString().slice(0, 10);
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `rolling-draw-backup-${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showBackupStatus('Backup exported. Keep the file somewhere safe.');
+    }
+
+    function triggerBackupImport() {
+        const input = document.getElementById('backupImportInput');
+        if (!input) return;
+        input.value = '';
+        input.click();
+    }
+
+    function applyBackupPayload(payload) {
+        const importedData = payload?.data || payload?.appData;
+        if (!importedData || (!Array.isArray(importedData.chores) && !Array.isArray(importedData.leisures))) {
+            throw new Error('This does not look like a Rolling Draw backup.');
+        }
+
+        appData = normalizeData(importedData);
+        currentTab = 'chores';
+        currentChoreSubtab = 'task';
+        currentPlayerMode = payload.playerMode === 'two' ? 'two' : 'single';
+        soundEnabled = payload.soundEnabled !== false;
+        leisureCooldownId = typeof payload.leisureCooldownId === 'string' ? payload.leisureCooldownId : null;
+        choreCooldownIds.clear();
+        activeDrawnItems = { solo: null, player1: null, player2: null };
+        pendingDeleteId = null;
+        editingId = null;
+        formOpen = false;
+
+        const importedNames = payload.playerNames || {};
+        playerNames = {
+            player1: String(importedNames.player1 || DEFAULT_PLAYER_NAMES.player1).trim() || DEFAULT_PLAYER_NAMES.player1,
+            player2: String(importedNames.player2 || DEFAULT_PLAYER_NAMES.player2).trim() || DEFAULT_PLAYER_NAMES.player2
+        };
+
+        if (payload.theme === 'light') document.body.classList.remove('dark-mode');
+        if (payload.theme === 'dark') document.body.classList.add('dark-mode');
+
+        saveToLocal();
+        setTokens(Number.isFinite(Number(payload.tokens)) ? Math.max(0, Math.floor(Number(payload.tokens))) : 0);
+        localStorage.setItem('rollingDrawPublicSound', soundEnabled ? 'on' : 'off');
+        localStorage.setItem('rollingDrawPublicPlayerMode', currentPlayerMode);
+        localStorage.setItem('rollingDrawPublicTheme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+        localStorage.setItem('rollingDrawPublicPlayerName1', playerNames.player1);
+        localStorage.setItem('rollingDrawPublicPlayerName2', playerNames.player2);
+        if (leisureCooldownId) localStorage.setItem('rollingDrawPublicLeisureCooldownId', leisureCooldownId);
+        else localStorage.removeItem('rollingDrawPublicLeisureCooldownId');
+
+        renderPlayerNames();
+        updateThemeIcon();
+        applyPlayerMode(true);
+        switchTab('chores');
+        renderSystemSettings();
+        PLAYERS.forEach(resetWheel);
+        updateAllSpinButtonStates();
+    }
+
+    function handleBackupImport(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const payload = JSON.parse(String(reader.result || ''));
+                applyBackupPayload(payload);
+                showBackupStatus('Backup imported successfully.');
+            } catch (error) {
+                showBackupStatus(error.message || 'Could not import this backup.', true);
+            }
+        };
+        reader.onerror = () => showBackupStatus('Could not read this file.', true);
+        reader.readAsText(file);
+    }
+
+    window.addEventListener('storage', (e) => {
+        if ((e.key === 'rollingDrawPublicDataV1_ts' || e.key === 'rollingDrawPublicDataLegacyV6_ts' || e.key === 'rollingDrawPublicDataLegacyV5_ts') && !isSpinning) {
+            appData = loadData();
+            if (document.getElementById('settingsModal').classList.contains('active')) renderEditList();
+        }
+        if (e.key === 'rollingDrawPublicTokens') {
+            renderTokens(getTokens());
+            updateLeisureLock(getTokens());
+        }
+        if (e.key === 'rollingDrawPublicLeisureCooldownId') {
+            leisureCooldownId = localStorage.getItem('rollingDrawPublicLeisureCooldownId') || null;
+        }
+        if (e.key === 'rollingDrawPublicPlayerMode' && !isSpinning) {
+            currentPlayerMode = localStorage.getItem('rollingDrawPublicPlayerMode') === 'two' ? 'two' : 'single';
+            applyPlayerMode(false);
+        }
+        if (e.key === 'rollingDrawPublicSound') {
+            soundEnabled = localStorage.getItem('rollingDrawPublicSound') !== 'off';
+            renderSystemSettings();
+        }
+        if (e.key === 'rollingDrawPublicPlayerName1' || e.key === 'rollingDrawPublicPlayerName2') {
+            playerNames = loadPlayerNames();
+            renderPlayerNames();
+        }
+        if (e.key === 'rollingDrawPublicTheme') {
+            const dark = localStorage.getItem('rollingDrawPublicTheme') !== 'light';
+            document.body.classList.toggle('dark-mode', dark);
+            updateThemeIcon();
+            renderSystemSettings();
+        }
+    });
+
+    // ── Player mode ────────────────────────────────────────────────────────────
+    function visiblePlayers() {
+        return currentPlayerMode === 'two' ? ['player1', 'player2'] : ['solo'];
+    }
+
+    function clearActiveRolls() {
+        PLAYERS.forEach(playerId => {
+            activeDrawnItems[playerId] = null;
+            showPanel(playerId, 'panelSpin');
+        });
+    }
+
+    function applyPlayerMode(clearActives = true) {
+        appShell.classList.toggle('two-player', currentPlayerMode === 'two');
+        appShell.classList.toggle('single-player', currentPlayerMode !== 'two');
+        if (playerModeBtn) {
+            playerModeBtn.innerHTML = currentPlayerMode === 'two' ? onePlayerSVG : twoPlayerSVG;
+            playerModeBtn.title = currentPlayerMode === 'two' ? 'Switch to single-player mode' : 'Switch to two-player mode';
+            playerModeBtn.setAttribute('aria-label', playerModeBtn.title);
+        }
+        if (clearActives) clearActiveRolls();
+        updateAllSpinButtonStates();
+        updateLeisureLock(getTokens());
+        renderPlayerNames();
+        renderSystemSettings();
+        updateFormVisibility();
+        if (document.getElementById('settingsModal')?.classList.contains('active')) {
+            resetForm();
+            renderEditList();
+        }
+    }
+
+    function togglePlayerMode() {
+        if (isSpinning) return;
+        currentPlayerMode = currentPlayerMode === 'two' ? 'single' : 'two';
+        localStorage.setItem('rollingDrawPublicPlayerMode', currentPlayerMode);
+        applyPlayerMode(true);
+        renderSystemSettings();
+    }
+
+    // ── Settings utility menu ─────────────────────────────────────────────────
+    let settingsView = 'lists';
+    let formOpen = false;
+
+    function getCurrentItemNoun() {
+        if (currentTab === 'leisures') return 'leisure';
+        return currentChoreSubtab === 'reward' ? 'reward' : 'task';
+    }
+
+    function updateAddButtonLabel() {
+        const btn = document.getElementById('openFormBtn');
+        if (btn) btn.innerText = `+ New ${getCurrentItemNoun()}`;
+    }
+
+    function syncFormChrome() {
+        const showSystem = settingsView === 'system';
+        const addRow = document.getElementById('addItemRow');
+        const form = document.getElementById('editForm');
+        if (addRow) addRow.style.display = showSystem ? 'none' : (formOpen ? 'none' : 'flex');
+        if (form) form.style.display = showSystem ? 'none' : (formOpen ? 'flex' : 'none');
+        updateAddButtonLabel();
+    }
+
+    function setFormOpen(open) {
+        formOpen = Boolean(open);
+        syncFormChrome();
+        updateFormVisibility();
+    }
+
+    function setSettingsView(view) {
+        settingsView = view === 'system' ? 'system' : 'lists';
+        const showSystem = settingsView === 'system';
+        document.getElementById('systemPanel').style.display = showSystem ? 'block' : 'none';
+        document.querySelector('.tabs').style.display = showSystem ? 'none' : 'flex';
+        document.getElementById('sectionTools').style.display = showSystem ? 'none' : 'flex';
+        document.getElementById('editList').style.display = showSystem ? 'none' : 'block';
+        syncFormChrome();
+        document.getElementById('modalTitle').innerText = showSystem ? 'App Settings' : 'Manage Lists';
+        settingsMenuBtn.innerHTML = showSystem ? listSVG : slidersSVG;
+        settingsMenuBtn.title = showSystem ? 'Back to lists' : 'App settings';
+        settingsMenuBtn.setAttribute('aria-label', settingsMenuBtn.title);
+        renderSystemSettings();
+    }
+
+    function toggleSettingsMenu() {
+        setSettingsView(settingsView === 'system' ? 'lists' : 'system');
+    }
+
+    function renderSystemSettings() {
+        const dark = document.body.classList.contains('dark-mode');
+        const themeButton = document.getElementById('systemThemeBtn');
+        const soundButton = document.getElementById('systemSoundBtn');
+        const playerButton = document.getElementById('systemPlayerModeBtn');
+        if (themeButton) themeButton.innerHTML = dark ? sunSVG : moonSVG;
+        if (soundButton) soundButton.innerHTML = soundEnabled ? volumeOnSVG : volumeOffSVG;
+        if (playerButton) playerButton.innerHTML = currentPlayerMode === 'two' ? onePlayerSVG : twoPlayerSVG;
+
+        const appearanceDesc = document.getElementById('appearanceDesc');
+        const soundDesc = document.getElementById('soundDesc');
+        const playerModeDesc = document.getElementById('playerModeDesc');
+        if (appearanceDesc) appearanceDesc.innerText = dark ? 'Dark mode' : 'Light mode';
+        if (soundDesc) soundDesc.innerText = soundEnabled ? 'Wheel clicks on' : 'Wheel clicks off';
+        if (playerModeDesc) playerModeDesc.innerText = currentPlayerMode === 'two' ? `${getOwnerLabel('player1')} + ${getOwnerLabel('player2')}` : 'Single player';
+    }
+
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem('rollingDrawPublicSound', soundEnabled ? 'on' : 'off');
+        renderSystemSettings();
+    }
+
+    function renderResetDefault() {
+        const popup = document.getElementById('resetPopup');
+        if (popup) popup.classList.remove('active');
+    }
+
+    function requestFullReset() {
+        const popup = document.getElementById('resetPopup');
+        if (!popup) return;
+        popup.classList.add('active');
+    }
+
+    function cancelFullReset() {
+        const popup = document.getElementById('resetPopup');
+        if (popup) popup.classList.remove('active');
+    }
+
+    function performFullReset() {
+        cancelFullReset();
+        WIDGET_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
+        appData = { chores: [], leisures: [] };
+        currentTab = 'chores';
+        currentChoreSubtab = 'task';
+        currentPlayerMode = 'single';
+        soundEnabled = true;
+        playerNames = { ...DEFAULT_PLAYER_NAMES };
+        leisureCooldownId = null;
+        choreCooldownIds.clear();
+        activeDrawnItems = { solo: null, player1: null, player2: null };
+        pendingDeleteId = null;
+        editingId = null;
+        formOpen = false;
+
+        if (!document.body.classList.contains('dark-mode')) document.body.classList.add('dark-mode');
+        localStorage.setItem('rollingDrawPublicDataV1', JSON.stringify(appData));
+        localStorage.setItem('rollingDrawPublicDataV1_ts', Date.now().toString());
+        setTokens(0);
+        localStorage.setItem('rollingDrawPublicSound', 'on');
+        localStorage.setItem('rollingDrawPublicPlayerMode', currentPlayerMode);
+        localStorage.setItem('rollingDrawPublicTheme', 'dark');
+        localStorage.setItem('rollingDrawPublicPlayerName1', DEFAULT_PLAYER_NAMES.player1);
+        localStorage.setItem('rollingDrawPublicPlayerName2', DEFAULT_PLAYER_NAMES.player2);
+        localStorage.removeItem('rollingDrawPublicLeisureCooldownId');
+
+        renderPlayerNames();
+        updateThemeIcon();
+        applyPlayerMode(true);
+        switchTab('chores');
+        setSettingsView('lists');
+        renderResetDefault();
+        PLAYERS.forEach(resetWheel);
+        updateAllSpinButtonStates();
+    }
+
+    // ── Player names ──────────────────────────────────────────────────────────
+    function renderPlayerNames() {
+        const player1Name = getOwnerLabel('player1');
+        const player2Name = getOwnerLabel('player2');
+        const player1Display = document.getElementById('playerName-player1');
+        const player2Display = document.getElementById('playerName-player2');
+        if (player1Display) player1Display.innerText = player1Name;
+        if (player2Display) player2Display.innerText = player2Name;
+        const player1Input = document.getElementById('playerNameInput-player1');
+        const player2Input = document.getElementById('playerNameInput-player2');
+        if (player1Input && !document.getElementById('playerTitle-player1').classList.contains('editing')) player1Input.value = player1Name;
+        if (player2Input && !document.getElementById('playerTitle-player2').classList.contains('editing')) player2Input.value = player2Name;
+        const ownerPlayer1 = document.getElementById('ownerLabel-player1');
+        const ownerPlayer2 = document.getElementById('ownerLabel-player2');
+        if (ownerPlayer1) ownerPlayer1.innerText = player1Name;
+        if (ownerPlayer2) ownerPlayer2.innerText = player2Name;
+        renderSystemSettings();
+        if (document.getElementById('settingsModal')?.classList.contains('active')) {
+            updateParentDropdown();
+            renderEditList();
+        }
+    }
+
+    function openPlayerNameEditor(player, event) {
+        if (event) event.stopPropagation();
+        if (isSpinning || currentPlayerMode !== 'two') return;
+        const title = document.getElementById(`playerTitle-${player}`);
+        const input = document.getElementById(`playerNameInput-${player}`);
+        if (!title || !input) return;
+        input.value = getOwnerLabel(player);
+        title.classList.add('editing');
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+    }
+
+    function commitPlayerName(player) {
+        const title = document.getElementById(`playerTitle-${player}`);
+        const input = document.getElementById(`playerNameInput-${player}`);
+        if (!title || !input || !title.classList.contains('editing')) return;
+        const fallback = DEFAULT_PLAYER_NAMES[player];
+        const value = input.value.trim() || fallback;
+        playerNames[player] = value;
+        localStorage.setItem(player === 'player1' ? 'rollingDrawPublicPlayerName1' : 'rollingDrawPublicPlayerName2', value);
+        title.classList.remove('editing');
+        renderPlayerNames();
+    }
+
+    function handlePlayerNameInputKey(event, player) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            event.target.blur();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.target.value = getOwnerLabel(player);
+            document.getElementById(`playerTitle-${player}`)?.classList.remove('editing');
+        }
+    }
+
+    // ── Mode radio ─────────────────────────────────────────────────────────────
+    function currentMode(playerId) {
+        return document.getElementById(`modeLeisures-${playerId}`).checked ? 'leisures' : 'chores';
+    }
+
+    function onModeChange(playerId) {
+        if (isSpinning && lockedModesDuringSpin[playerId]) {
+            document.getElementById(`modeChores-${playerId}`).checked = lockedModesDuringSpin[playerId] === 'chores';
+            document.getElementById(`modeLeisures-${playerId}`).checked = lockedModesDuringSpin[playerId] === 'leisures';
+            return;
+        }
+
+        updateLeisureLock(getTokens());
+
+        const active = activeDrawnItems[playerId];
+        if (active && active.category !== currentMode(playerId)) {
+            activeDrawnItems[playerId] = null;
+            showPanel(playerId, 'panelSpin');
+            return;
+        }
+
+        updateSpinButtonState(playerId);
+        updateChoreRerollButtonState(playerId);
+    }
+
+    function getSpinButtonDefaultLabel(playerId) {
+        return currentMode(playerId) === 'leisures' ? `🎲 Roll (${LEISURE_COST}🪙)` : '🎲 Roll';
+    }
+
+    function updateSpinButtonState(playerId) {
+        const btn = document.getElementById(`spinBtn-${playerId}`);
+        if (!btn || isSpinning) return;
+
+        const mode = currentMode(playerId);
+        if (mode === 'leisures') {
+            const canAfford = getTokens() >= LEISURE_COST;
+            btn.disabled = !canAfford;
+        } else {
+            btn.disabled = false;
+        }
+
+        if (!spinButtonHintTimers[playerId]) {
+            btn.innerText = getSpinButtonDefaultLabel(playerId);
+            btn.classList.remove('btn-feedback');
+        }
+    }
+
+    function showSpinButtonHint(playerId, message) {
+        const btn = document.getElementById(`spinBtn-${playerId}`);
+        if (!btn) return;
+        clearTimeout(spinButtonHintTimers[playerId]);
+        btn.classList.add('btn-feedback');
+        btn.innerText = message;
+        spinButtonHintTimers[playerId] = setTimeout(() => {
+            spinButtonHintTimers[playerId] = null;
+            btn.classList.remove('btn-feedback');
+            updateSpinButtonState(playerId);
+        }, 1500);
+    }
+
+    function clearSpinButtonHint(playerId) {
+        clearTimeout(spinButtonHintTimers[playerId]);
+        spinButtonHintTimers[playerId] = null;
+        const btn = document.getElementById(`spinBtn-${playerId}`);
+        if (btn) btn.classList.remove('btn-feedback');
+    }
+
+    function updateAllSpinButtonStates() {
+        PLAYERS.forEach(updateSpinButtonState);
+        PLAYERS.forEach(updateChoreRerollButtonState);
+    }
+
+    function setSpinningUi(spinning) {
+        isSpinning = spinning;
+        if (spinning) {
+            lockedModesDuringSpin = {};
+            PLAYERS.forEach(playerId => { lockedModesDuringSpin[playerId] = currentMode(playerId); });
+        } else {
+            lockedModesDuringSpin = {};
+        }
+
+        PLAYERS.forEach(playerId => {
+            const spinBtn = document.getElementById(`spinBtn-${playerId}`);
+            const toggles = document.getElementById(`toggles-${playerId}`);
+            if (!spinBtn) return;
+            clearSpinButtonHint(playerId);
+            spinBtn.disabled = spinning;
+            spinBtn.style.pointerEvents = spinning ? 'none' : 'auto';
+            spinBtn.innerText = spinning ? '🎲 Rolling...' : getSpinButtonDefaultLabel(playerId);
+            if (toggles) toggles.classList.toggle('spinning', spinning);
+        });
+
+        settingsBtn.disabled = spinning;
+        if (playerModeBtn) playerModeBtn.disabled = spinning;
+    }
+
+    // ── Eligibility ────────────────────────────────────────────────────────────
+    function itemAllowedForPlayer(item, playerId) {
+        if (currentPlayerMode !== 'two' || playerId === 'solo') return true;
+        return item.owner === 'both' || item.owner === playerId;
+    }
+
+    function activeReservedIds(category, exceptPlayer = null) {
+        const ids = new Set();
+        Object.entries(activeDrawnItems).forEach(([playerId, active]) => {
+            if (playerId === exceptPlayer) return;
+            if (active && active.category === category) ids.add(active.id);
+        });
+        return ids;
+    }
+
+    function isItemEligible(item, category) {
+        if (category !== 'chores') return true;
+        if (!item.parentId) return true;
+        return !appData.chores.some(i => i.id === item.parentId);
+    }
+
+    function getBaseEligibleChores(playerId) {
+        const reserved = activeReservedIds('chores', playerId);
+        return appData.chores.filter(item =>
+            !item.disabled &&
+            isItemEligible(item, 'chores') &&
+            itemAllowedForPlayer(item, playerId) &&
+            !reserved.has(item.id)
+        );
+    }
+
+    function getEligibleChores(playerId) {
+        return getBaseEligibleChores(playerId).filter(item => !choreCooldownIds.has(item.id));
+    }
+
+    function clearChoreCooldowns() {
+        choreCooldownIds.clear();
+        PLAYERS.forEach(updateChoreRerollButtonState);
+    }
+
+    function hasAlternativeChoreForReroll(playerId) {
+        const active = activeDrawnItems[playerId];
+        if (!active || active.category !== 'chores') return false;
+        return getBaseEligibleChores(playerId).some(item =>
+            item.id !== active.id && !choreCooldownIds.has(item.id)
+        );
+    }
+
+    function updateChoreRerollButtonState(playerId) {
+        const btn = document.getElementById(`rerollChoreBtn-${playerId}`);
+        if (!btn) return;
+        const canReroll = hasAlternativeChoreForReroll(playerId);
+        btn.disabled = !canReroll;
+        btn.title = canReroll ? 'Reroll this item temporarily' : 'No other eligible chores or rewards right now';
+    }
+
+    function getEligibleLeisures(playerId) {
+        const reserved = activeReservedIds('leisures', playerId);
+        let eligible = appData.leisures.filter(item => !item.disabled && itemAllowedForPlayer(item, playerId) && !reserved.has(item.id));
+        if (leisureCooldownId && eligible.length > 1) {
+            const filtered = eligible.filter(item => item.id !== leisureCooldownId);
+            if (filtered.length) eligible = filtered;
+        }
+        return eligible;
+    }
+
+    function hasPausedOnlyItems(playerId, mode) {
+        if (mode === 'chores') {
+            return appData.chores.some(item => item.disabled && itemAllowedForPlayer(item, playerId));
+        }
+        return appData.leisures.some(item => item.disabled && itemAllowedForPlayer(item, playerId));
+    }
+
+    function makeTicketPool(items, category) {
+        const pool = [];
+        items.forEach(item => {
+            const tickets = item.priority === 'low' ? 1 : item.priority === 'high' ? 4 : 2;
+            const color = category === 'chores' ? categoryColors[item.subcat || 'task'] : categoryColors.leisures;
+            for (let t = 0; t < tickets; t++) pool.push({ ...item, category, color });
+        });
+        return pool;
+    }
+
+    // ── Panels ─────────────────────────────────────────────────────────────────
+    function showPanel(playerId, panelName) {
+        [`panelSpin-${playerId}`, `panelChore-${playerId}`].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = id === `${panelName}-${playerId}` ? 'flex' : 'none';
+        });
+        updateSpinButtonState(playerId);
+        updateChoreRerollButtonState(playerId);
+    }
+
+    function resetWheel(playerId) {
+        const wheel = document.getElementById(`wheel-${playerId}`);
+        wheel.innerHTML = '<div class="wheel-item">Ready to roll...</div>';
+        wheel.style.transform = 'translateY(0)';
+    }
+
+    function clearWheel(playerId) {
+        const wheel = document.getElementById(`wheel-${playerId}`);
+        wheel.innerHTML = '<div class="wheel-item"></div>';
+        wheel.style.transition = 'none';
+        wheel.style.transform = 'translateY(0)';
+    }
+
+    // ── Draw ───────────────────────────────────────────────────────────────────
+    function drawItem(playerId, trackRoll = true) {
+        if (isSpinning) return;
+        initAudio();
+        appData = loadData();
+        activeDrawnItems[playerId] = null;
+
+        const mode = currentMode(playerId);
+        const wheel = document.getElementById(`wheel-${playerId}`);
+        let pool = [];
+
+        if (mode === 'chores') {
+            pool = makeTicketPool(getEligibleChores(playerId), 'chores');
+        } else {
+            if (getTokens() < LEISURE_COST) {
+                clearWheel(playerId);
+                showSpinButtonHint(playerId, `Need ${LEISURE_COST}🪙`);
+                updateLeisureLock(getTokens());
+                return;
+            }
+            pool = makeTicketPool(getEligibleLeisures(playerId), 'leisures');
+            if (pool.length === 0) {
+                clearWheel(playerId);
+                showSpinButtonHint(playerId, hasPausedOnlyItems(playerId, 'leisures') ? 'Resume leisures first' : 'Add leisures first');
+                return;
+            }
+        }
+
+        if (pool.length === 0) {
+            clearWheel(playerId);
+            showSpinButtonHint(playerId, hasPausedOnlyItems(playerId, 'chores') ? 'Resume items first' : 'Add tasks or rewards');
+            return;
+        }
+
+        showPanel(playerId, 'panelSpin');
+        setSpinningUi(true);
+
+        if (mode === 'leisures' && !trySpendTokens(LEISURE_COST)) {
+            setSpinningUi(false);
+            clearWheel(playerId);
+            showSpinButtonHint(playerId, `Need ${LEISURE_COST}🪙`);
+            updateLeisureLock(getTokens());
+            return;
+        }
+
+        wheel.style.transition = 'none';
+        wheel.style.transform = 'translateY(0)';
+        wheel.innerHTML = '';
+
+        const spinCount = 25;
+        for (let i=0; i<spinCount; i++) {
+            const item = pool[Math.floor(Math.random()*pool.length)];
+            const div = document.createElement('div');
+            div.className = 'wheel-item';
+            div.innerText = item.text;
+            div.style.color = item.color;
+            wheel.appendChild(div);
+        }
+
+        const finalItem = pool[Math.floor(Math.random()*pool.length)];
+        if (trackRoll) {
+            trackUsageEvent('roll', {
+                playerId,
+                category: analyticsCategoryFromItem(finalItem)
+            });
+        }
+        const finalDiv = document.createElement('div');
+        finalDiv.className = 'wheel-item';
+        finalDiv.innerText = finalItem.text;
+        finalDiv.style.color = finalItem.color;
+        wheel.appendChild(finalDiv);
+
+        void wheel.offsetWidth;
+
+        const targetY = -(spinCount * 100);
+        wheel.style.transition = `transform ${SPIN_DURATION}s ${SPIN_EASING}`;
+        wheel.style.transform = `translateY(${targetY}px) rotateX(2deg)`;
+
+        playWheelRattle(SPIN_DURATION, spinCount);
+
+        setTimeout(() => {
+            playWheelStop();
+            setSpinningUi(false);
+
+            if (finalItem.category === 'leisures') {
+                leisureCooldownId = finalItem.id;
+                localStorage.setItem('rollingDrawPublicLeisureCooldownId', leisureCooldownId);
+                activeDrawnItems[playerId] = null;
+                showPanel(playerId, 'panelSpin');
+                updateLeisureLock(getTokens());
+            } else {
+                activeDrawnItems[playerId] = { category: 'chores', id: finalItem.id, subcat: finalItem.subcat || 'task' };
+                showPanel(playerId, 'panelChore');
+            }
+
+            PLAYERS.forEach(updateChoreRerollButtonState);
+        }, SPIN_DURATION * 1000);
+    }
+
+    // ── Resolve ────────────────────────────────────────────────────────────────
+    function resolveItem(playerId, action) {
+        const active = activeDrawnItems[playerId];
+        if (!active) return;
+        initAudio();
+
+        if (action === 'complete') {
+            appData = loadData();
+            const { id, subcat } = active;
+            const exists = appData.chores.some(item => item.id === id);
+
+            if (exists) {
+                trackUsageEvent('complete', {
+                    playerId,
+                    category: subcat === 'reward' ? 'reward' : 'task'
+                });
+                const completedItem = appData.chores.find(item => item.id === id);
+                const keepReusableReward = completedItem?.subcat === 'reward' && completedItem.reusable;
+                appData.chores.forEach(item => { if (item.parentId === id) item.parentId = ""; });
+                if (!keepReusableReward) {
+                    appData.chores = appData.chores.filter(item => item.id !== id);
+                }
+                saveToLocal();
+                clearChoreCooldowns();
+
+                if (subcat === 'task') {
+                    addTokens(1);
+                    playChime();
+                    fireConfetti(playerId);
+                } else {
+                    playChime();
+                }
+            }
+
+            activeDrawnItems[playerId] = null;
+            resetWheel(playerId);
+            showPanel(playerId, 'panelSpin');
+        }
+        else if (action === 'reroll') {
+            if (!hasAlternativeChoreForReroll(playerId)) {
+                updateChoreRerollButtonState(playerId);
+                return;
+            }
+            trackUsageEvent('reroll', {
+                playerId,
+                category: active.subcat === 'reward' ? 'reward' : 'task'
+            });
+            choreCooldownIds.add(active.id);
+            activeDrawnItems[playerId] = null;
+            showPanel(playerId, 'panelSpin');
+            drawItem(playerId, false);
+            return;
+        }
+
+        activeDrawnItems[playerId] = null;
+        PLAYERS.forEach(updateChoreRerollButtonState);
+    }
+
+    // ── Settings modal ─────────────────────────────────────────────────────────
+    function toggleModal() {
+        if (isSpinning) return;
+        const modal = document.getElementById('settingsModal');
+        modal.classList.toggle('active');
+        if (modal.classList.contains('active')) {
+            appData = loadData();
+            setSettingsView('lists');
+            resetForm();
+            renderEditList();
+        }
+    }
+
+    function switchTab(category) {
+        currentTab = category;
+        pendingDeleteId = null;
+        clearTimeout(pendingDeleteTimer);
+
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.className = 'tab-btn');
+        document.getElementById(`tab-${category}`).classList.add(`active-${category}`);
+        document.querySelector(`input[name="settingsCategory"][value="${category}"]`).checked = true;
+
+        const isChores = category === 'chores';
+        document.getElementById('choreSubtabs').style.display = isChores ? 'inline-flex' : 'none';
+        document.getElementById('dependencyRow').style.display = isChores ? 'flex' : 'none';
+        document.getElementById('sectionLabel').innerText = isChores ? 'Chores' : 'Leisures';
+        updateFormVisibility();
+
+        resetForm();
+        renderEditList();
+    }
+
+    function switchChoreSubtab(subcat) {
+        currentChoreSubtab = subcat === 'reward' ? 'reward' : 'task';
+        pendingDeleteId = null;
+        clearTimeout(pendingDeleteTimer);
+
+        document.querySelectorAll('.subtab-btn').forEach(btn => btn.className = 'subtab-btn');
+        document.getElementById(`subtab-${currentChoreSubtab}`).classList.add(`active-${currentChoreSubtab}`);
+        document.querySelector(`input[name="choreSubtab"][value="${currentChoreSubtab}"]`).checked = true;
+        updateFormVisibility();
+
+        resetForm();
+        renderEditList();
+    }
+
+    function getCurrentFormPlaceholder() {
+        if (currentTab === 'leisures') return 'Add new leisure...';
+        return currentChoreSubtab === 'reward' ? 'Add new reward...' : 'Add new task...';
+    }
+
+    function updateOwnerSlider() {
+        const selected = document.querySelector('input[name="ownerSelect"]:checked')?.value || 'both';
+        document.getElementById('ownerControl').dataset.owner = selected;
+    }
+
+    function getSelectedOwner() {
+        return normalizeOwner(document.querySelector('input[name="ownerSelect"]:checked')?.value || 'both');
+    }
+
+    function setSelectedOwner(owner) {
+        const safe = normalizeOwner(owner);
+        const input = document.querySelector(`input[name="ownerSelect"][value="${safe}"]`);
+        if (input) input.checked = true;
+        document.getElementById('ownerControl').dataset.owner = safe;
+    }
+
+    function updateReusableSlider() {
+        const selected = document.querySelector('input[name="reusableSelect"]:checked')?.value || 'no';
+        document.getElementById('reusableControl').dataset.reusable = selected === 'yes' ? 'yes' : 'no';
+    }
+
+    function getSelectedReusable() {
+        return document.querySelector('input[name="reusableSelect"]:checked')?.value === 'yes';
+    }
+
+    function setSelectedReusable(isReusable) {
+        const value = isReusable ? 'yes' : 'no';
+        const input = document.querySelector(`input[name="reusableSelect"][value="${value}"]`);
+        if (input) input.checked = true;
+        document.getElementById('reusableControl').dataset.reusable = value;
+    }
+
+    function normalizeRollChance(level) {
+        return ['low', 'normal', 'high'].includes(level) ? level : 'normal';
+    }
+
+    function updateRollChanceSlider() {
+        const selected = normalizeRollChance(document.querySelector('input[name="rollChanceSelect"]:checked')?.value || 'normal');
+        document.getElementById('rollChanceControl').dataset.chance = selected;
+    }
+
+    function getSelectedRollChance() {
+        return normalizeRollChance(document.querySelector('input[name="rollChanceSelect"]:checked')?.value || 'normal');
+    }
+
+    function setSelectedRollChance(level) {
+        const safe = normalizeRollChance(level);
+        const input = document.querySelector(`input[name="rollChanceSelect"][value="${safe}"]`);
+        if (input) input.checked = true;
+        document.getElementById('rollChanceControl').dataset.chance = safe;
+    }
+
+    function getRollChanceIcon(level) {
+        const safe = normalizeRollChance(level);
+        const baseClass = `chance-icon chance-${safe}`;
+        const paths = {
+            low: '<path class="chance-line" d="M7 9.5L12 14.5L17 9.5"/>',
+            normal: '<path class="chance-line" d="M7.5 12H16.5"/>',
+            high: '<path class="chance-line" d="M7 14.5L12 9.5L17 14.5"/>'
+        };
+        return `<svg class="${baseClass}" viewBox="0 0 24 24" aria-hidden="true">${paths[safe]}</svg>`;
+    }
+
+    function getRollChanceTitle(level) {
+        const safe = normalizeRollChance(level);
+        if (safe === 'low') return 'Rare roll chance';
+        if (safe === 'high') return 'Often roll chance';
+        return 'Normal roll chance';
+    }
+
+    function updateFormVisibility() {
+        const ownerRow = document.getElementById('ownerRow');
+        const reusableRow = document.getElementById('reusableRow');
+        if (ownerRow) ownerRow.style.display = currentPlayerMode === 'two' ? 'flex' : 'none';
+        if (reusableRow) reusableRow.style.display = currentTab === 'chores' && currentChoreSubtab === 'reward' ? 'flex' : 'none';
+    }
+
+    function getDependencyInfo(item) {
+        if (!item?.parentId) return null;
+        const parent = appData.chores.find(chore => chore.id === item.parentId);
+        if (!parent) return null;
+        const itemSubcat = item.subcat || 'task';
+        const parentSubcat = parent.subcat || 'task';
+        if (itemSubcat === parentSubcat) return null;
+        const badge = parentSubcat === 'reward' ? '🏆' : '📋';
+        const ownerPart = currentPlayerMode === 'two' ? ` · ${getOwnerLabel(parent.owner || 'both')}` : '';
+        const warning = currentPlayerMode === 'two' &&
+            item.owner !== 'both' && parent.owner !== 'both' && item.owner !== parent.owner;
+        return {
+            text: `Waits for: ${badge} ${parent.text}${ownerPart}`,
+            warning
+        };
+    }
+
+    function updateParentDropdown() {
+        const select = document.getElementById('parentSelect');
+        select.innerHTML = '<option value="">No dependency</option>';
+        if (currentTab !== 'chores') return;
+
+        const blocked = new Set();
+        if (editingId) {
+            blocked.add(editingId);
+            getDescendantIds(editingId, appData.chores).forEach(id => blocked.add(id));
+        }
+
+        appData.chores.forEach(item => {
+            if (!blocked.has(item.id)) {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                const badge = item.subcat === 'reward' ? '🏆' : '📋';
+                const ownerText = currentPlayerMode === 'two' ? ` · ${getOwnerLabel(item.owner || 'both')}` : '';
+                opt.innerText = `Wait for: ${badge} ${item.text}${ownerText}`;
+                select.appendChild(opt);
+            }
+        });
+    }
+
+    function sortItemsForDisplay(list) {
+        return [...list].sort((a, b) => {
+            if (Boolean(a.disabled) !== Boolean(b.disabled)) return a.disabled ? 1 : -1;
+            return 0;
+        });
+    }
+
+    function renderEditList() {
+        const container = document.getElementById('editList');
+        container.innerHTML = '';
+        updateParentDropdown();
+
+        const sourceItems = appData[currentTab];
+        const items = currentTab === 'chores'
+            ? sourceItems.filter(item => (item.subcat || 'task') === currentChoreSubtab)
+            : sourceItems;
+
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.innerText = currentTab === 'chores'
+                ? (currentChoreSubtab === 'reward' ? 'No chore rewards yet.' : 'No tasks yet.')
+                : 'No leisures yet.';
+            container.appendChild(empty);
+            return;
+        }
+
+        const itemMap = new Map();
+        const ids = new Set(items.map(item => item.id));
+        items.forEach(item => {
+            const key = item.parentId && ids.has(item.parentId) ? item.parentId : "";
+            if (!itemMap.has(key)) itemMap.set(key, []);
+            itemMap.get(key).push(item);
+        });
+
+        itemMap.forEach((group, key) => itemMap.set(key, sortItemsForDisplay(group)));
+
+        function renderNode(item, depth) {
+            const div = document.createElement('div');
+            const itemTypeClass = currentTab === 'chores'
+                ? ((item.subcat || 'task') === 'reward' ? 'edit-item-reward' : 'edit-item-task')
+                : 'edit-item-leisure';
+            const oneLineCard = currentPlayerMode !== 'two';
+            div.className = `edit-item ${itemTypeClass}${item.disabled ? ' edit-item-paused' : ''}${oneLineCard ? ' edit-item-single-line' : ''}`;
+            div.style.marginLeft = `${depth * 1.5}rem`;
+            div.title = item.disabled ? 'Paused — click the card to edit, or play to resume' : 'Click to edit';
+            div.onclick = () => editItem(item.id);
+
+            if (depth > 0) {
+                const elbow = document.createElement('div');
+                elbow.className = 'tree-elbow';
+                div.appendChild(elbow);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `edit-item-content${oneLineCard ? ' single-line-content' : ''}`;
+
+            const metaRow = document.createElement('div');
+            metaRow.className = 'item-meta-row';
+
+            const dependency = currentTab === 'chores' ? getDependencyInfo(item) : null;
+
+            if ((item.subcat || '') === 'reward' && item.reusable) {
+                const anchorMeta = document.createElement('span');
+                anchorMeta.className = 'meta-anchor';
+                anchorMeta.title = 'Reusable reward — stays after completion';
+                anchorMeta.innerHTML = anchorItemSVG;
+                metaRow.appendChild(anchorMeta);
+            }
+
+            if (currentPlayerMode === 'two') {
+                const ownerMeta = document.createElement('span');
+                ownerMeta.className = `meta-owner ${item.owner || 'both'}`;
+                ownerMeta.innerText = getOwnerLabel(item.owner || 'both');
+                metaRow.appendChild(ownerMeta);
+            }
+
+            const pLevel = normalizeRollChance(item.priority || 'normal');
+            if (pLevel !== 'normal') {
+                const chanceIndicator = document.createElement('span');
+                chanceIndicator.className = `roll-chance-indicator chance-${pLevel}`;
+                chanceIndicator.innerHTML = getRollChanceIcon(pLevel);
+                chanceIndicator.title = getRollChanceTitle(pLevel);
+                metaRow.appendChild(chanceIndicator);
+            }
+
+            if (dependency) {
+                const depSpan = document.createElement('span');
+                depSpan.className = `dependency-meta${dependency.warning ? ' warning' : ''}`;
+                depSpan.innerText = dependency.text;
+                depSpan.title = dependency.warning ? 'Cross-player dependency' : 'Dependency';
+                metaRow.appendChild(depSpan);
+            }
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'edit-item-text';
+            textSpan.innerText = item.text;
+
+            if (oneLineCard) {
+                const inlineMetaBefore = [];
+                const inlineMetaAfter = [];
+                Array.from(metaRow.childNodes).forEach(node => {
+                    if (node.classList?.contains('meta-anchor')) inlineMetaBefore.push(node);
+                    else inlineMetaAfter.push(node);
+                });
+                inlineMetaBefore.forEach(node => contentDiv.appendChild(node));
+                contentDiv.appendChild(textSpan);
+                inlineMetaAfter.forEach(node => contentDiv.appendChild(node));
+            } else {
+                contentDiv.appendChild(textSpan);
+                if (metaRow.childNodes.length) contentDiv.appendChild(metaRow);
+            }
+
+            const controlsWrapper = document.createElement('div');
+            controlsWrapper.className = 'item-controls';
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'action-btns';
+
+            if (pendingDeleteId === item.id) {
+                const deleteChoice = document.createElement('div');
+                deleteChoice.className = 'delete-choice';
+                deleteChoice.onclick = (e) => e.stopPropagation();
+
+                const sureBtn = document.createElement('button');
+                sureBtn.className = 'delete-sure-btn';
+                sureBtn.innerText = 'Sure?';
+                sureBtn.title = 'Delete this item';
+                sureBtn.onclick = (e) => { e.stopPropagation(); deleteItem(item.id); };
+
+                const keepBtn = document.createElement('button');
+                keepBtn.className = 'delete-keep-btn';
+                keepBtn.innerText = 'Keep';
+                keepBtn.title = 'Keep this item';
+                keepBtn.onclick = (e) => { e.stopPropagation(); cancelDelete(); };
+
+                deleteChoice.appendChild(sureBtn);
+                deleteChoice.appendChild(keepBtn);
+                actionsDiv.appendChild(deleteChoice);
+            } else {
+                const pauseBtn = document.createElement('button');
+                pauseBtn.className = item.disabled ? 'item-resume-btn' : 'item-pause-btn';
+                pauseBtn.innerHTML = item.disabled ? playItemSVG : pauseItemSVG;
+                pauseBtn.title = item.disabled ? 'Resume item and children' : 'Pause item and children';
+                pauseBtn.setAttribute('aria-label', item.disabled ? 'Resume item and children' : 'Pause item and children');
+                pauseBtn.onclick = (e) => { e.stopPropagation(); toggleItemPaused(item.id); };
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'item-delete-btn';
+                deleteBtn.innerHTML = trashItemSVG;
+                deleteBtn.title = 'Delete';
+                deleteBtn.setAttribute('aria-label', 'Delete item');
+                deleteBtn.onclick = (e) => { e.stopPropagation(); requestDelete(item.id); };
+
+                actionsDiv.appendChild(pauseBtn);
+                actionsDiv.appendChild(deleteBtn);
+            }
+
+            controlsWrapper.appendChild(actionsDiv);
+            div.appendChild(contentDiv);
+            div.appendChild(controlsWrapper);
+            container.appendChild(div);
+
+            (itemMap.get(item.id) || []).forEach(child => renderNode(child, depth + 1));
+        }
+
+        (itemMap.get("") || []).forEach(root => renderNode(root, 0));
+    }
+
+    function saveFormItem() {
+        const text = document.getElementById('itemTextInput').value.trim();
+        let parentId = document.getElementById('parentSelect').value;
+        const selectedOwner = currentPlayerMode === 'two' ? getSelectedOwner() : 'both';
+        const selectedPriority = getSelectedRollChance();
+        const selectedReusable = currentTab === 'chores' && currentChoreSubtab === 'reward' ? getSelectedReusable() : false;
+        if (!text) return;
+
+        setFormNotice('');
+        appData = loadData();
+
+        if (currentTab === 'chores') {
+            const subcat = currentChoreSubtab;
+            const targetItems = appData.chores;
+
+            if (parentId && !itemExists(targetItems, parentId)) parentId = '';
+            if (editingId && wouldCreateCycle(editingId, parentId, targetItems)) {
+                setFormNotice('That dependency would create a loop, so it was not saved.');
+                return;
+            }
+
+            if (editingId) {
+                const item = targetItems.find(i => i.id === editingId);
+                if (item) {
+                    item.text = text;
+                    item.parentId = parentId;
+                    item.priority = selectedPriority;
+                    item.reusable = subcat === 'reward' ? selectedReusable : false;
+                    if (currentPlayerMode === 'two') item.owner = selectedOwner;
+                }
+            } else {
+                targetItems.push({ id: generateId(), text, parentId, priority: selectedPriority, subcat, owner: selectedOwner, reusable: subcat === 'reward' ? selectedReusable : false, disabled: false });
+            }
+        } else {
+            if (editingId) {
+                const item = appData.leisures.find(i => i.id === editingId);
+                if (item) {
+                    item.text = text;
+                    item.parentId = '';
+                    item.priority = selectedPriority;
+                    if (currentPlayerMode === 'two') item.owner = selectedOwner;
+                }
+            } else {
+                appData.leisures.push({ id: generateId(), text, parentId: '', priority: selectedPriority, owner: selectedOwner, disabled: false });
+            }
+        }
+
+        saveToLocal();
+        resetForm();
+        renderEditList();
+        updateAllSpinButtonStates();
+    }
+
+    function editItem(id) {
+        editingId = id;
+        setFormNotice('');
+        const item = appData[currentTab].find(i => i.id === id);
+        if (!item) return;
+        document.getElementById('itemTextInput').value = item.text;
+        setSelectedOwner(item.owner || 'both');
+        setSelectedRollChance(item.priority || 'normal');
+        setSelectedReusable(Boolean(item.reusable));
+        setFormOpen(true);
+        updateParentDropdown();
+        document.getElementById('parentSelect').value = item.parentId || "";
+        document.getElementById('saveBtn').innerText = 'Save Changes';
+        document.getElementById('cancelBtn').style.display = 'block';
+    }
+
+    function clearActiveRollForItem(id, category) {
+        PLAYERS.forEach(playerId => {
+            const active = activeDrawnItems[playerId];
+            if (active && active.id === id && active.category === category) {
+                activeDrawnItems[playerId] = null;
+                resetWheel(playerId);
+                showPanel(playerId, 'panelSpin');
+            }
+        });
+    }
+
+    function toggleItemPaused(id) {
+        clearTimeout(pendingDeleteTimer);
+        pendingDeleteId = null;
+        appData = loadData();
+
+        const items = appData[currentTab];
+        const item = items.find(i => i.id === id);
+        if (!item) return;
+
+        const nextDisabledState = !item.disabled;
+        const affectedIds = new Set([id, ...getDescendantIds(id, items)]);
+
+        items.forEach(entry => {
+            if (affectedIds.has(entry.id)) entry.disabled = nextDisabledState;
+        });
+
+        if (nextDisabledState) {
+            affectedIds.forEach(affectedId => {
+                choreCooldownIds.delete(affectedId);
+                clearActiveRollForItem(affectedId, currentTab);
+                if (currentTab === 'leisures' && leisureCooldownId === affectedId) {
+                    leisureCooldownId = null;
+                    localStorage.removeItem('rollingDrawPublicLeisureCooldownId');
+                }
+            });
+        }
+
+        saveToLocal();
+        renderEditList();
+        updateAllSpinButtonStates();
+        PLAYERS.forEach(updateChoreRerollButtonState);
+    }
+
+    function requestDelete(id) {
+        pendingDeleteId = id;
+        renderEditList();
+        clearTimeout(pendingDeleteTimer);
+        pendingDeleteTimer = setTimeout(() => {
+            pendingDeleteId = null;
+            renderEditList();
+        }, 3500);
+    }
+
+    function cancelDelete() {
+        clearTimeout(pendingDeleteTimer);
+        pendingDeleteId = null;
+        renderEditList();
+    }
+
+    function deleteItem(id) {
+        clearTimeout(pendingDeleteTimer);
+        pendingDeleteId = null;
+        choreCooldownIds.delete(id);
+
+        appData[currentTab].forEach(i => { if (i.parentId === id) i.parentId = ""; });
+        appData[currentTab] = appData[currentTab].filter(i => i.id !== id);
+
+        PLAYERS.forEach(playerId => {
+            const active = activeDrawnItems[playerId];
+            if (active && active.id === id && active.category === currentTab) {
+                activeDrawnItems[playerId] = null;
+                resetWheel(playerId);
+                showPanel(playerId, 'panelSpin');
+            }
+        });
+
+        if (currentTab === 'leisures' && leisureCooldownId === id) {
+            leisureCooldownId = null;
+            localStorage.removeItem('rollingDrawPublicLeisureCooldownId');
+        }
+
+        saveToLocal();
+        resetForm();
+        renderEditList();
+        updateAllSpinButtonStates();
+    }
+
+    function openAddForm() {
+        editingId = null;
+        setFormNotice('');
+        document.getElementById('itemTextInput').value = '';
+        document.getElementById('parentSelect').value = '';
+        document.getElementById('itemTextInput').placeholder = getCurrentFormPlaceholder();
+        document.getElementById('saveBtn').innerText = `Add ${getCurrentItemNoun()}`;
+        document.getElementById('cancelBtn').style.display = 'block';
+        setSelectedOwner('both');
+        setSelectedRollChance('normal');
+        setSelectedReusable(false);
+        updateParentDropdown();
+        setFormOpen(true);
+        setTimeout(() => document.getElementById('itemTextInput')?.focus(), 0);
+    }
+
+    function resetForm() {
+        editingId = null;
+        setFormNotice('');
+        document.getElementById('itemTextInput').value = '';
+        document.getElementById('parentSelect').value = '';
+        document.getElementById('itemTextInput').placeholder = getCurrentFormPlaceholder();
+        document.getElementById('saveBtn').innerText = `Add ${getCurrentItemNoun()}`;
+        document.getElementById('cancelBtn').style.display = 'none';
+        setSelectedOwner('both');
+        setSelectedRollChance('normal');
+        setSelectedReusable(false);
+        updateParentDropdown();
+        setFormOpen(false);
+    }
+
+    function handleEnter(e) { if (e.key === 'Enter') saveFormItem(); }
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    updateLeisureCostLabels();
+    renderTokens(getTokens());
+    renderPlayerNames();
+    applyPlayerMode(false);
+    updateLeisureLock(getTokens());
+    switchTab('chores');
+    setSettingsView('lists');
+    renderSystemSettings();
+    trackUsageEvent('open');
+</script>
+
+</body>
+</html>
