@@ -2007,30 +2007,44 @@
     const LEISURE_COST = 3;
     const PLAYERS = ['solo', 'player1', 'player2'];
     const ANALYTICS_ENDPOINT = 'https://rolling-draw-counter.pih3g6nsn.workers.dev/track';
+    const ANALYTICS_EVENTS = new Set(['open', 'roll', 'reroll', 'complete']);
+    const ANALYTICS_CATEGORIES = new Set(['task', 'reward', 'leisure']);
 
-    function trackUsageEvent(eventName) {
-        if (eventName !== 'open' && eventName !== 'roll') return;
+    function getAnalyticsPlayerMode() {
+        return currentPlayerMode === 'two' ? '2p' : '1p';
+    }
 
-        const payload = JSON.stringify({ event: eventName });
+    function normalizeAnalyticsCategory(category) {
+        if (category === 'tasks') return 'task';
+        if (category === 'rewards') return 'reward';
+        if (category === 'leisures') return 'leisure';
+        return ANALYTICS_CATEGORIES.has(category) ? category : '';
+    }
+
+    function analyticsCategoryFromItem(item) {
+        if (!item) return '';
+        if (item.category === 'leisures' || item.category === 'leisure') return 'leisure';
+        if (item.subcat === 'reward') return 'reward';
+        return 'task';
+    }
+
+    function trackUsageEvent(eventName, category = '') {
+        if (!ANALYTICS_EVENTS.has(eventName)) return;
+
+        const normalizedCategory = normalizeAnalyticsCategory(category);
+        if (eventName !== 'open' && !normalizedCategory) return;
 
         try {
-            if (navigator.sendBeacon) {
-                const blob = new Blob([payload], { type: 'application/json' });
-                if (navigator.sendBeacon(ANALYTICS_ENDPOINT, blob)) return;
-            }
+            const params = new URLSearchParams();
+            params.set('event', eventName);
+            params.set('mode', getAnalyticsPlayerMode());
+            if (normalizedCategory) params.set('category', normalizedCategory);
+            params.set('t', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+            const img = new Image();
+            img.src = `${ANALYTICS_ENDPOINT}?${params.toString()}`;
         } catch (error) {
             // Tracking should never interrupt the widget.
-        }
-
-        try {
-            fetch(ANALYTICS_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: payload,
-                keepalive: true
-            }).catch(() => {});
-        } catch (error) {
-            // Ignore tracking errors.
         }
     }
     const DEFAULT_PLAYER_NAMES = { player1: 'Player 1', player2: 'Player 2' };
@@ -2968,7 +2982,7 @@
     }
 
     // ── Draw ───────────────────────────────────────────────────────────────────
-    function drawItem(playerId) {
+    function drawItem(playerId, trackRoll = true) {
         if (isSpinning) return;
         initAudio();
         appData = loadData();
@@ -3012,8 +3026,6 @@
             return;
         }
 
-        trackUsageEvent('roll');
-
         wheel.style.transition = 'none';
         wheel.style.transform = 'translateY(0)';
         wheel.innerHTML = '';
@@ -3029,6 +3041,9 @@
         }
 
         const finalItem = pool[Math.floor(Math.random()*pool.length)];
+        if (trackRoll) {
+            trackUsageEvent('roll', analyticsCategoryFromItem(finalItem));
+        }
         const finalDiv = document.createElement('div');
         finalDiv.className = 'wheel-item';
         finalDiv.innerText = finalItem.text;
@@ -3074,6 +3089,7 @@
             const exists = appData.chores.some(item => item.id === id);
 
             if (exists) {
+                trackUsageEvent('complete', subcat === 'reward' ? 'reward' : 'task');
                 const completedItem = appData.chores.find(item => item.id === id);
                 const keepReusableReward = completedItem?.subcat === 'reward' && completedItem.reusable;
                 appData.chores.forEach(item => { if (item.parentId === id) item.parentId = ""; });
@@ -3101,10 +3117,11 @@
                 updateChoreRerollButtonState(playerId);
                 return;
             }
+            trackUsageEvent('reroll', active.subcat === 'reward' ? 'reward' : 'task');
             choreCooldownIds.add(active.id);
             activeDrawnItems[playerId] = null;
             showPanel(playerId, 'panelSpin');
-            drawItem(playerId);
+            drawItem(playerId, false);
             return;
         }
 
